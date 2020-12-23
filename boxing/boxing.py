@@ -106,9 +106,13 @@ class Calculator(threading.Thread, pack_1D):
         self.numScale = 6  # 小数四舍五入位数,推荐：3，4
         self.sleepTime = 0  # 睡眠时间,用来调整计算速度，推荐：1，0.001，0
         self.roundScale = 180   # 每次旋转的刻度,推荐：如4代表每次旋转90°，8代表每次旋转45°
-        self.gridScale = 2  # 遍历时使用的栅格的放大倍数
+        self.gridScale = 10  # 遍历时使用的栅格的放大倍数
         self.gridX = 40 # 排布时的X范围
         self.gridY = 50 # Y
+
+    def setWidthHeight(self, width, height):
+        self.gridX = int(width)  # 排布时的X范围
+        self.gridY = int(height)  # Y
 
     def initGrid(self):
         '''

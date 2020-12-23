@@ -32,12 +32,17 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.co_fullLine = QtCore.Qt.lightGray
         self.co_border = QtCore.Qt.darkBlue
         self.origin = (550, 100)   # 画布原点
-        self.l = 40 # 绘图区域长
-        self.h = 50 # 绘图区域高
+        self.l = 30 # 绘图区域长
+        self.h = 40 # 绘图区域高
         self.scale = 8  # 缩放比例
         self.iptpoints = []  # 读取的数据点: [[num, gender, [[0, 0], [0, 0], [0, 0], [0, 0]]], ...]
         self.optpoints = [[0, 0, -1, [[0,0], [0,0], [0,0]]]]  # 输出的数据点: [[s, num, gender, [[], [], [], []]], ..]
         self.fullLine = 0  # 100利用率线
+
+        # add
+        self.data = {}      # 矩形元素：{'A':[1.0, 2.0, ...], ...}
+        self.select = {}    # 选择的元素：{'A':[1, 3,...],...}
+        self.boxs = []      # 箱子尺寸数据：[width, height, number]
 
         self.setupUi(self)
         self.buttonEvent()
@@ -92,9 +97,10 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
         # 画边界框
         co1 = QtGui.QColor(QtCore.Qt.black)
-        self.qp.setPen(co1)
+        self.qp.setPen(co1)     # 设置画笔颜色
         x = self.origin[0]
         y = self.origin[1]
+        # drawRect()有四个参数，分别是矩形的x、y、w、h，分别是左上角点，矩形宽度和高度
         self.qp.drawRect(x, y, self.l * self.scale, self.h * self.scale)
         # 画饱和线
         co2 = QtGui.QColor(self.co_fullLine)
@@ -104,7 +110,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
                          self.origin[0] + self.l*self.scale,
                          self.origin[1] + self.scale*(self.h - self.fullLine))
         # 显示高度
-        self.qp.drawText(self.origin[0] + 40*self.scale + 7,
+        self.qp.drawText(self.origin[0] + self.l*self.scale + 7,
                          self.origin[1] + self.scale * (self.h - self.fullLine),
                          str(self.fullLine))
 
@@ -171,8 +177,8 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
                          self.origin[0] + self.l*self.scale,
                          Y - y_max*scale)
         # 显示高度
-        self.qp.drawText(self.origin[0] + 40*self.scale + 7,
-                         self.origin[1] + (50-y_max)*self.scale,
+        self.qp.drawText(self.origin[0] + self.l*self.scale + 7,
+                         self.origin[1] + (self.h-y_max)*self.scale,
                          str(y_max))
 
     def get_usage(self):
@@ -184,7 +190,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             y_arr.extend([i[1] for i in point])
 
         y_max = max(y_arr)
-        usage = round(S / (40 * y_max)*100, 2) # 利用率
+        usage = round(S / (self.l * y_max)*100, 2) # 利用率
 
         return usage, y_max
 
@@ -209,6 +215,9 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
     # 确认读取
     def confirmLoad(self):
+        self.data = {}
+        self.select = {}
+        self.boxs = []
         self.iptpoints = []  # 清除本地数据
         self.clear()
 
@@ -217,38 +226,47 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             fileopen = open(self.readurl, 'r')
             k = fileopen.read()
 
-            # dump进程序
-            num = 0
-            for i in k.split('\n'):
-                if not i:
-                    continue
-
+            # 获取所有矩形、定制的矩形元素、箱子的长x宽和箱子数目
+            readLines = k.split('\n')
+            total = int(readLines[0])
+            for i in readLines[1:total + 1]:
                 location = i.split(',')
-                print(location)
-                gender = int(location[0])
-                amount = int(location[7])   # 该图形的总量
-                if amount <= 0:
-                    continue
-                elif amount == 1:
-                    dumped_location = []
-                    for i in [1, 3, 5]:
-                        dumped_location.append([int(location[i]), int(location[i+1])])
-                    self.iptpoints.append([num, gender, dumped_location])    # [[0, [[], [], [], []]], []]
-                    num = num + 1  # 图形编号
+                self.data[location[0]] = list(map(float, location[1:]))
+            location = readLines[total + 1].split(',')
+            for i in location:
+                key = i[:1]
+                index = int(i[1:]) - 1
+                if key not in self.select.keys():
+                    self.select[key] = [index]
                 else:
-                    for k in range(amount):
-                        dumped_location = []
-                        for i in [1, 3, 5]:
-                            dumped_location.append([int(location[i]), int(location[i + 1])])
-                        self.iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
-                        num = num + 1  # 图形编号
+                    self.select[key].append(index)
+            location = readLines[total + 2].split(',')
+            self.boxs = list(map(float, location))
+
+            # 设置图框大小
+            a = min(self.boxs[0], self.boxs[1])*self.boxs[2]
+            b = max(self.boxs[0], self.boxs[1])
+            calculator.setWidthHeight(max(a,b), min(a,b))
+            self.l=max(a,b)
+            self.h=min(a,b)
+
+            # 加载选择的矩形数据
+            num = 0
+            for key in self.select.keys():
+                gender = 0  # 0矩形 / 1三角形
+                idxList = self.select[key]
+                for idx in idxList:
+                    width = self.data[key][2 * idx]
+                    height = self.data[key][2 * idx + 1]
+                    dumped_location = [[0, 0], [width, 0], [width, height], [0, height]]
+                    self.iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
+                    num = num + 1  # 图形编号
 
             self.pushButton_3.setEnabled(True)
             self.statusBar.showMessage('    成功读取文件!!: ' + self.readurl)
         except Exception as e:
             print(e, '输入数据有问题')
             self.statusBar.showMessage('    输入的数据格式错误!!: ' + self.readurl)
-
 
         print(self.iptpoints)
 
