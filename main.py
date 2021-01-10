@@ -31,9 +31,9 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.co_alarmLine = QtCore.Qt.red
         self.co_fullLine = QtCore.Qt.lightGray
         self.co_border = QtCore.Qt.darkBlue
-        self.origin = (550, 100)   # 画布原点
-        self.l = 30 # 绘图区域长
-        self.h = 40 # 绘图区域高
+        self.origin = (550, 120)   # 画布原点
+        self.l = 30.0 # 绘图区域长
+        self.h = 40.0 # 绘图区域高
         self.scale = 8  # 缩放比例
         self.iptpoints = []  # 读取的数据点: [[num, gender, [[0, 0], [0, 0], [0, 0], [0, 0]]], ...]
         self.optpoints = [[0, 0, -1, [[0,0], [0,0], [0,0]]]]  # 输出的数据点: [[s, num, gender, [[], [], [], []]], ..]
@@ -42,7 +42,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         # add
         self.data = {}      # 矩形元素：{'A':[1.0, 2.0, ...], ...}
         self.select = {}    # 选择的元素：{'A':[1, 3,...],...}
-        self.boxs = []      # 箱子尺寸数据：[width, height, number]
+        self.keyMap = {}    # num对应的字符串标识
 
         self.setupUi(self)
         self.buttonEvent()
@@ -57,31 +57,31 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.t1.start()
         calculator.start()
 
-    # 捕捉键盘
-    def keyPressEvent(self, a0: QtGui.QKeyEvent):
-        # Esc
-        if a0.key() == QtCore.Qt.Key_Escape:
-            self.close()
-        # S/P
-        if a0.key() == QtCore.Qt.Key_P or a0.key() == QtCore.Qt.Key_S:
-            self.pushButton.click()
-
-    # 捕捉鼠标
-    def mouseMoveEvent(self, a0: QtGui.QMouseEvent):
-        x = a0.x()
-        y = a0.y()
-        l = self.l*self.scale
-        h = self.h*self.scale
-        x0 = self.origin[0]
-        y0 = self.origin[1]
-
-        if x0-5 < x < x0+l+5 and y0-5 < y < y0+h+5:
-            x = (x-x0)/self.scale
-            y = (y0+h-y)/self.scale
-            text = 'x: {0}, y: {1}'.format(x, y)
-        else:
-            text = '请点击矩形框内以获取坐标'
-        self.label_3.setText(text)
+    # # 捕捉键盘
+    # def keyPressEvent(self, a0: QtGui.QKeyEvent):
+    #     # Esc
+    #     if a0.key() == QtCore.Qt.Key_Escape:
+    #         self.close()
+    #     # S/P
+    #     if a0.key() == QtCore.Qt.Key_P or a0.key() == QtCore.Qt.Key_S:
+    #         self.pushButton.click()
+    #
+    # # 捕捉鼠标
+    # def mouseMoveEvent(self, a0: QtGui.QMouseEvent):
+    #     x = a0.x()
+    #     y = a0.y()
+    #     l = self.l*self.scale
+    #     h = self.h*self.scale
+    #     x0 = self.origin[0]
+    #     y0 = self.origin[1]
+    #
+    #     if x0-5 < x < x0+l+5 and y0-5 < y < y0+h+5:
+    #         x = (x-x0)/self.scale
+    #         y = (y0+h-y)/self.scale
+    #         text = 'x: {0}, y: {1}'.format(x, y)
+    #     else:
+    #         text = '请点击矩形框内以获取坐标'
+    #     self.label_3.setText(text)
 
     def closeEvent(self, event):
         '''
@@ -105,14 +105,14 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         # 画饱和线
         co2 = QtGui.QColor(self.co_fullLine)
         self.qp.setPen(co2)
-        self.qp.drawLine(self.origin[0],
-                         self.origin[1] + self.scale*(self.h - self.fullLine),
-                         self.origin[0] + self.l*self.scale,
-                         self.origin[1] + self.scale*(self.h - self.fullLine))
-        # 显示高度
-        self.qp.drawText(self.origin[0] + self.l*self.scale + 7,
-                         self.origin[1] + self.scale * (self.h - self.fullLine),
-                         str(self.fullLine))
+        # self.qp.drawLine(self.origin[0],
+        #                  self.origin[1] + self.scale*(self.h - self.fullLine),
+        #                  self.origin[0] + self.l*self.scale,
+        #                  self.origin[1] + self.scale*(self.h - self.fullLine))
+        # # 显示高度
+        # self.qp.drawText(self.origin[0] + self.l*self.scale + 7,
+        #                  self.origin[1] + self.scale * (self.h - self.fullLine),
+        #                  str(self.fullLine))
 
         # 画出图形
         try:
@@ -144,9 +144,9 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             polygon = QtGui.QPolygon(points)
             self.qp.drawPolygon(polygon)
 
-            x = (location[0][0] * scale + location[1][0] * scale + location[2][0] * scale) / 3 + X  # 标号的位置
-            y = -(location[0][1] * scale + location[1][1] * scale + location[2][1] * scale) / 3 + Y
-            self.qp.drawText(x, y, str(num))
+            x = (location[0][0] * scale + location[1][0] * scale ) / 2 + X  # 标号的位置
+            y = -(location[0][1] * scale + location[2][1] * scale) / 2 + Y
+            self.qp.drawText(x, y, self.keyMap[num])
 
         elif shape == 1:
             co1 = QtGui.QColor(self.co_border)
@@ -169,17 +169,17 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         usage, y_max = self.get_usage()
         self.label.setText('利用率：' + str(usage) + '%')
 
-        # 显示警戒线
-        co2 = QtGui.QColor(self.co_alarmLine)
-        self.qp.setPen(co2)
-        self.qp.drawLine(self.origin[0],
-                         Y - y_max*scale,
-                         self.origin[0] + self.l*self.scale,
-                         Y - y_max*scale)
-        # 显示高度
-        self.qp.drawText(self.origin[0] + self.l*self.scale + 7,
-                         self.origin[1] + (self.h-y_max)*self.scale,
-                         str(y_max))
+        # # 显示警戒线
+        # co2 = QtGui.QColor(self.co_alarmLine)
+        # self.qp.setPen(co2)
+        # self.qp.drawLine(self.origin[0],
+        #                  Y - y_max*scale,
+        #                  self.origin[0] + self.l*self.scale,
+        #                  Y - y_max*scale)
+        # # 显示高度
+        # self.qp.drawText(self.origin[0] + self.l*self.scale + 7,
+        #                  self.origin[1] + (self.h-y_max)*self.scale,
+        #                  str(y_max))
 
     def get_usage(self):
         S = 0   # 已画图形的面积
@@ -190,7 +190,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             y_arr.extend([i[1] for i in point])
 
         y_max = max(y_arr)
-        usage = round(S / (self.l * y_max)*100, 2) # 利用率
+        usage = round(S / (self.l * self.h)*100, 2) # 利用率
 
         return usage, y_max
 
@@ -231,7 +231,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             total = int(readLines[0])
             for i in readLines[1:total + 1]:
                 location = i.split(',')
-                self.data[location[0]] = list(map(float, location[1:]))
+                self.data[location[0]] = list(map(float, location[2:]))
             location = readLines[total + 1].split(',')
             for i in location:
                 key = i[:1]
@@ -246,20 +246,24 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             # 设置图框大小
             a = min(self.boxs[0], self.boxs[1])*self.boxs[2]
             b = max(self.boxs[0], self.boxs[1])
-            calculator.setWidthHeight(max(a,b), min(a,b))
-            self.l=max(a,b)
-            self.h=min(a,b)
+            calculator.setWidthHeight(max(a, b), min(a, b))
+            self.l = max(a, b)
+            self.h = min(a, b)
+            self.scale = 350/self.l
 
             # 加载选择的矩形数据
             num = 0
             for key in self.select.keys():
-                gender = 0  # 0矩形 / 1三角形
+                gender = 0
                 idxList = self.select[key]
                 for idx in idxList:
                     width = self.data[key][2 * idx]
                     height = self.data[key][2 * idx + 1]
                     dumped_location = [[0, 0], [width, 0], [width, height], [0, height]]
+                    if key == 'D':
+                        calculator.setRoom(num)
                     self.iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
+                    self.keyMap[num] = key + str(idx + 1)
                     num = num + 1  # 图形编号
 
             self.pushButton_3.setEnabled(True)
@@ -330,6 +334,10 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.runningTime = 0
         self.update()
 
+        self.data.clear()
+        self.select.clear()
+        self.keyMap.clear()
+
         self.pushButton_1.setEnabled(True)
         self.statusBar.showMessage('    状态：清除图形成功，计算终止...（请选择 输入数据/保存数据）')
 
@@ -345,15 +353,22 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         except Exception as e:
             print(e)
 
+        # 清除
+        self.clear()
+        # 确定
+        self.confirmLoad()
+        # 开始
+        self.run_()
+
     def resume(self):
-        self.pushButton.setText('暂停')
+        #self.pushButton.setText('暂停')
         self.pushButton_4.setEnabled(False)
         self.statusBar.showMessage('    状态：计算中...')
         self.__flag.set()   # T
         calculator.resume()
 
     def pause(self):
-        self.pushButton.setText('继续')
+        #self.pushButton.setText('继续')
         self.pushButton_4.setEnabled(True)
         self.statusBar.showMessage('    状态：暂停中...')
 
@@ -370,7 +385,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             # 实时更新数据
             self.optpoints, stop = calculator.uploadData()    # [[s, num, gender, [[], [], [], []]], ..]
             self.optpoints.reverse()
-            if len(self.optpoints) != 1 and self.optpoints[0][1] == self.optpoints[1][1]:
+            if len(self.optpoints)>0 and len(self.optpoints) != 1 and self.optpoints[0][1] == self.optpoints[1][1]:
                 self.optpoints.pop(0)
 
             # 刷新时间

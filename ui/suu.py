@@ -85,5 +85,5 @@ class Ui_MainWindow(object):
         self.pushButton_1.setText(_translate("MainWindow", "确定"))
         self.label.setText(_translate("MainWindow", "利用率"))
         self.label_2.setText(_translate("MainWindow", "运行时间"))
-        self.pushButton.setText(_translate("MainWindow", "暂停"))
+        self.pushButton.setText(_translate("MainWindow", "重新开始"))
         self.pushButton_4.setText(_translate("MainWindow", "清除"))
