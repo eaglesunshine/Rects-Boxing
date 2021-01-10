@@ -147,8 +147,20 @@ class Calculator(threading.Thread, pack_1D):
         np.random.seed()  # RandomState生成随机数种子
 
         # ====================排列矩形====================
-        self.place_rect_rand()
+        source_rects = self.rects
+        while(len(self.optpoints)<len(source_rects) + 1):
+            self.rects = source_rects
+            # 获取互斥锁后，进程只能在释放锁后下个进程才能进来
+            self.mutex.acquire()
+            self.optpoints = [[0, 0, -1, [[0, 0], [0, 0], [0, 0]]]]
+            # 互斥锁必须被释放掉
+            self.mutex.release()
+            self.settledPoints.clear()
+            self.initGrid()
+            self.place_rect_rand()
         # ====================排列矩形====================
+
+        #self.place_rect_rand()
 
         self.settledPoints = self.bestChoice
         return True
@@ -186,19 +198,21 @@ class Calculator(threading.Thread, pack_1D):
         graph = room_rect[3]
         l = graph[2][0] - graph[0][0]  # 长度
         h = graph[2][1] - graph[0][1]  # 高度
-        # 固定位置：图框中心
-        pos_x = round(self.gridX / 2 - l / 2, 1)
-        pos_y = round(self.gridY / 2 - h / 2, 1)
-        new_graph = [[pos_x , pos_y ], [pos_x + l, pos_y ],
-                    [pos_x + l , pos_y + h ], [pos_x , pos_y + h ]]
-        # # 随机探索客厅左下角点的可行位置
-        # low_x = 0
-        # high_x = int((self.gridX - l)*self.gridScale)
-        # low_y = 0
-        # high_y = int((self.gridY - h)*self.gridScale)
-        # pos_x = self.randPos(low_x, high_x )
-        # pos_y = self.randPos(low_y, high_y )
-        # new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
+
+        # # 固定位置：图框中心
+        # pos_x = round(self.gridX / 2 - l / 2, 1)
+        # pos_y = round(self.gridY / 2 - h / 2, 1)
+        # new_graph = [[pos_x , pos_y ], [pos_x + l, pos_y ],
+        #             [pos_x + l , pos_y + h ], [pos_x , pos_y + h ]]
+
+        # 随机探索客厅左下角点的可行位置
+        low_x = 0
+        high_x = int((self.gridX - l)*self.gridScale)
+        low_y = 0
+        high_y = int((self.gridY - h)*self.gridScale)
+        pos_x = self.randPos(low_x, high_x )
+        pos_y = self.randPos(low_y, high_y )
+        new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
 
         # Xc, Yc分别是所放置矩形的形心(矩形各节点坐标求均值所得)横坐标和纵坐标，y_max是矩形各节点坐标在纵向上的最大高度
         Xc, Yc, y_max = self.caculateCenter(0, new_graph)  # 旋转后的形心
@@ -206,7 +220,6 @@ class Calculator(threading.Thread, pack_1D):
         self.refreshData([Yc, y_max, Xc, 0, new_graph, room_rect[1], room_rect[0]],
                          save=True)  # [[Yc, y_max, Xc, gender, location, num, s],..]
         self.saveData([Yc, y_max, Xc, 0, new_graph, room_rect[1], room_rect[0]])
-        self.rects.remove(v)  # 删除客厅
         self.bestChoice = copy.deepcopy(self.settledPoints)  # 保存排列结果, [[Yc, y_max, Xc, gender, location, num, s], ..]
         self.room_points = self.bestChoice[0]
 
@@ -222,8 +235,6 @@ class Calculator(threading.Thread, pack_1D):
         for cursor_y in range(int(start_y * self.gridScale), int((room_graph[3][1] - 0.9) * self.gridScale) + 1):
             if start_x < rect_width:
                 break  # 探索区域容不下rect，直接退出
-            if self.grids[cursor_x, cursor_y] == 1:
-                continue  # 节点(x,y)已被占据，跳过扫描下一个节点
 
             # 判断当前角点pos是否合法，更新可行区间
             isValid = True
@@ -231,7 +242,7 @@ class Calculator(threading.Thread, pack_1D):
                 isValid = False
             else:
                 for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
-                    if self.grids[cursor_x, cursor] == 1:
+                    if self.grids[cursor_x - 1, cursor] == 1:
                         isValid = False
                         break
             if isValid:
@@ -263,8 +274,6 @@ class Calculator(threading.Thread, pack_1D):
         for cursor_x in range(int(start_x * self.gridScale), int((room_graph[2][0] - 0.9) * self.gridScale) + 1):
             if self.gridY - start_y < rect_height:
                 break  # 探索区域容不下rect，直接退出
-            if self.grids[cursor_x, cursor_y] == 1:
-                continue  # 节点(x,y)已被占据，跳过扫描下一个节点
 
             # 判断当前角点pos是否合法，更新可行区间
             isValid = True
@@ -272,7 +281,7 @@ class Calculator(threading.Thread, pack_1D):
                 isValid = False
             else:
                 for cursor in range(cursor_x, cursor_x + int(rect_width * self.gridScale) + 1):
-                    if self.grids[cursor, cursor_y] == 1:
+                    if self.grids[cursor, cursor_y + 1] == 1:
                         isValid = False
                         break
             if isValid:
@@ -304,8 +313,6 @@ class Calculator(threading.Thread, pack_1D):
         for cursor_y in range(int(start_y * self.gridScale), int((room_graph[2][1] - 0.9) * self.gridScale) + 1):
             if self.gridX - start_x < rect_width:
                 break  # 探索区域容不下rect，直接退出
-            if self.grids[cursor_x, cursor_y] == 1:
-                continue  # 节点(x,y)已被占据，跳过扫描下一个节点
 
             # 判断当前角点pos是否合法，更新可行区间
             isValid = True
@@ -313,7 +320,7 @@ class Calculator(threading.Thread, pack_1D):
                 isValid = False
             else:
                 for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
-                    if self.grids[cursor_x, cursor] == 1:
+                    if self.grids[cursor_x + 1, cursor] == 1:
                         isValid = False
                         break
             if isValid:
@@ -345,8 +352,6 @@ class Calculator(threading.Thread, pack_1D):
         for cursor_x in range(int(start_x * self.gridScale), int((room_graph[1][0] - 0.9) * self.gridScale) + 1):
             if start_y < rect_height:
                 break  # 探索区域容不下rect，直接退出
-            if self.grids[cursor_x, cursor_y] == 1:
-                continue  # 节点(x,y)已被占据，跳过扫描下一个节点
 
             # 判断当前角点pos是否合法，更新可行区间
             isValid = True
@@ -400,6 +405,7 @@ class Calculator(threading.Thread, pack_1D):
 
             # 搜索与客厅左边接触的可行空间：游标是rect的右下角点
             answer[i]["left"] = self.getLeftSpace(room_graph, rect_width, rect_height)
+
 
         # 返回可行空间
         return answer
@@ -471,12 +477,16 @@ class Calculator(threading.Thread, pack_1D):
         self.place_living_room()
 
         # 2.利用GA算法打乱后续元素的排列顺序
-        arr = np.array(range(0, len(self.rects), 1))
+        remain_rects = []
+        for v in self.rects:
+            if v[1] != self.room:  # 找出客厅
+                remain_rects.append(v)
+        arr = np.array(range(0, len(remain_rects), 1))
         np.random.shuffle(arr)  # 暂时使用随机打乱顺序，后续使用GA，但是困扰是GA优化的目标是什么？
 
         # 3.按照排列顺序，对于当前排列的每个元素，在其可行解空间中随机选取一个位置放置
         for i in arr:
-            rect = self.rects[i]
+            rect = remain_rects[i]
             print(rect)
             graph = rect[3]
             l = graph[2][0] - graph[0][0]  # 长度
@@ -786,7 +796,7 @@ class Calculator(threading.Thread, pack_1D):
         :param addFlag: 添加模式/删除模式
         :return:
         '''
-        print("refreshData")
+        #print("refreshData")
 
         # 获取互斥锁后，进程只能在释放锁后下个进程才能进来
         self.mutex.acquire()

@@ -2,6 +2,8 @@
 
 import sys, threading, os
 import time
+from PIL import ImageGrab
+import os
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 from ui.suu import *
@@ -21,7 +23,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.qp = QtGui.QPainter()  # 画布
         self.readurl = ''
         self.loadurl = ''
-        self.timeInterval = 0.001   # 画布刷新间隔：1为1s/0.001为 1ms
+        self.timeInterval = 0.01   # 画布刷新间隔：1为1s/0.001为 1ms
         self.now = time.time()
         self.startTime = time.time()   # 记录开始的时间戳
         self.pauseTime = 0
@@ -43,6 +45,8 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.data = {}      # 矩形元素：{'A':[1.0, 2.0, ...], ...}
         self.select = {}    # 选择的元素：{'A':[1, 3,...],...}
         self.keyMap = {}    # num对应的字符串标识
+        self.pic_count = 0  # 结果计数
+        self.boxStr = ""
 
         self.setupUi(self)
         self.buttonEvent()
@@ -219,7 +223,6 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.select = {}
         self.boxs = []
         self.iptpoints = []  # 清除本地数据
-        self.clear()
 
         try:
             print('confirm loading...')
@@ -242,6 +245,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
                     self.select[key].append(index)
             location = readLines[total + 2].split(',')
             self.boxs = list(map(float, location))
+            self.boxStr = location[0] + "x" + location[1] + "x" + location[2]
 
             # 设置图框大小
             a = min(self.boxs[0], self.boxs[1])*self.boxs[2]
@@ -337,6 +341,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.data.clear()
         self.select.clear()
         self.keyMap.clear()
+        #self.pic_count = 0
 
         self.pushButton_1.setEnabled(True)
         self.statusBar.showMessage('    状态：清除图形成功，计算终止...（请选择 输入数据/保存数据）')
@@ -380,7 +385,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         while self.__running.isSet():
             self.__flag.wait()
 
-            #time.sleep(self.timeInterval)
+            time.sleep(self.timeInterval)
 
             # 实时更新数据
             self.optpoints, stop = calculator.uploadData()    # [[s, num, gender, [[], [], [], []]], ..]
@@ -399,7 +404,13 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
                 self.statusBar.showMessage('    状态：计算完成...(请选择 保存数据/清除图形)')
                 self.__globalFlag.clear()
                 self.__globalFlag.wait()  # 结束
-
+                # 保存截图
+                path = "results\\" + self.boxStr
+                if os.path.exists(path) == False:
+                    os.mkdir(path)  # 创建目录
+                pic = ImageGrab.grab((1100, 500, 1500, 800))
+                pic.save(path + "\\" + str(self.pic_count) + ".jpg")
+                self.pic_count += 1
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
