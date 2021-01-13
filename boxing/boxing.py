@@ -188,196 +188,211 @@ class Calculator(threading.Thread, pack_1D):
         return new_graph
 
     def place_living_room(self):
-        # 1.找出客厅，计算坐标，插入绘图
-        room_rect = []
-        for v in self.rects:
-            if v[1] == self.room:  # 找出客厅
-                room_rect = v
-                break
-        # 计算客厅坐标
-        graph = room_rect[3]
-        l = graph[2][0] - graph[0][0]  # 长度
-        h = graph[2][1] - graph[0][1]  # 高度
+        try:
+            # 1.找出客厅，计算坐标，插入绘图
+            room_rect = []
+            for v in self.rects:
+                if v[1] == self.room:  # 找出客厅
+                    room_rect = v
+                    break
+            # 计算客厅坐标
+            graph = room_rect[3]
+            l = graph[2][0] - graph[0][0]  # 长度
+            h = graph[2][1] - graph[0][1]  # 高度
 
-        # # 固定位置：图框中心
-        # pos_x = round(self.gridX / 2 - l / 2, 1)
-        # pos_y = round(self.gridY / 2 - h / 2, 1)
-        # new_graph = [[pos_x , pos_y ], [pos_x + l, pos_y ],
-        #             [pos_x + l , pos_y + h ], [pos_x , pos_y + h ]]
+            # # 固定位置：图框中心
+            # pos_x = round(self.gridX / 2 - l / 2, 1)
+            # pos_y = round(self.gridY / 2 - h / 2, 1)
+            # new_graph = [[pos_x , pos_y ], [pos_x + l, pos_y ],
+            #             [pos_x + l , pos_y + h ], [pos_x , pos_y + h ]]
 
-        # 随机探索客厅左下角点的可行位置
-        low_x = 0
-        high_x = int((self.gridX - l)*self.gridScale)
-        low_y = 0
-        high_y = int((self.gridY - h)*self.gridScale)
-        pos_x = self.randPos(low_x, high_x )
-        pos_y = self.randPos(low_y, high_y )
-        new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
+            # 随机探索客厅左下角点的可行位置
+            low_x = 0
+            high_x = int((self.gridX - l)*self.gridScale)
+            low_y = 0
+            high_y = int((self.gridY - h)*self.gridScale)
+            pos_x = self.randPos(low_x, high_x )
+            pos_y = self.randPos(low_y, high_y )
+            new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
 
-        # Xc, Yc分别是所放置矩形的形心(矩形各节点坐标求均值所得)横坐标和纵坐标，y_max是矩形各节点坐标在纵向上的最大高度
-        Xc, Yc, y_max = self.caculateCenter(0, new_graph)  # 旋转后的形心
-        # 刷新正在排样的图形：往已有视图中添加该矩形
-        self.refreshData([Yc, y_max, Xc, 0, new_graph, room_rect[1], room_rect[0]],
-                         save=True)  # [[Yc, y_max, Xc, gender, location, num, s],..]
-        self.saveData([Yc, y_max, Xc, 0, new_graph, room_rect[1], room_rect[0]])
-        self.bestChoice = copy.deepcopy(self.settledPoints)  # 保存排列结果, [[Yc, y_max, Xc, gender, location, num, s], ..]
-        self.room_points = self.bestChoice[0]
+            # Xc, Yc分别是所放置矩形的形心(矩形各节点坐标求均值所得)横坐标和纵坐标，y_max是矩形各节点坐标在纵向上的最大高度
+            Xc, Yc, y_max = self.caculateCenter(0, new_graph)  # 旋转后的形心
+            # 刷新正在排样的图形：往已有视图中添加该矩形
+            self.refreshData([Yc, y_max, Xc, 0, new_graph, room_rect[1], room_rect[0]],
+                             save=True)  # [[Yc, y_max, Xc, gender, location, num, s],..]
+            self.saveData([Yc, y_max, Xc, 0, new_graph, room_rect[1], room_rect[0]])
+            self.bestChoice = copy.deepcopy(self.settledPoints)  # 保存排列结果, [[Yc, y_max, Xc, gender, location, num, s], ..]
+            self.room_points = self.bestChoice[0]
+        except Exception as e:
+            print(e)
 
     def getLeftSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
 
-        # 搜索与客厅左边接触的可行空间：游标是rect的右下角点
-        start_x = room_graph[0][0]
-        start_y = max(room_graph[0][1] - (rect_height - 0.9), 0)
-        cursor_x = int(start_x * self.gridScale)
-        last_valid = -1
-        sub_answer = []
-        for cursor_y in range(int(start_y * self.gridScale), int((room_graph[3][1] - 0.9) * self.gridScale) + 1):
-            if start_x < rect_width:
-                break  # 探索区域容不下rect，直接退出
+        try:
+            # 搜索与客厅左边接触的可行空间：游标是rect的右下角点
+            start_x = room_graph[0][0]
+            start_y = max(room_graph[0][1] - (rect_height - 0.9), 0)
+            cursor_x = int(start_x * self.gridScale)
+            last_valid = -1
+            sub_answer = []
+            for cursor_y in range(int(start_y * self.gridScale), int((room_graph[3][1] - 0.9) * self.gridScale) + 1):
+                if start_x < rect_width:
+                    break  # 探索区域容不下rect，直接退出
 
-            # 判断当前角点pos是否合法，更新可行区间
-            isValid = True
-            if cursor_y + int(rect_height * self.gridScale) > self.gridY* self.gridScale:
-                isValid = False
-            else:
-                for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
-                    if self.grids[cursor_x - 1, cursor] == 1:
-                        isValid = False
-                        break
-            if isValid:
-                if last_valid < 0:  # 创建新的answer区间
-                    sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
-                    last_valid = cursor_y
-                else:  # 更新answer区间
-                    sub_answer[3] = cursor_y
-            else:
-                if last_valid >= 0:  # 保存answer区间，并将last_valid复位
-                    last_valid = -1
+                # 判断当前角点pos是否合法，更新可行区间
+                isValid = True
+                if cursor_y + int(rect_height * self.gridScale) > self.gridY* self.gridScale:
+                    isValid = False
+                else:
+                    for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
+                        if self.grids[cursor_x - 1, cursor] == 1:
+                            isValid = False
+                            break
+                if isValid:
+                    if last_valid < 0:  # 创建新的answer区间
+                        sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
+                        last_valid = cursor_y
+                    else:  # 更新answer区间
+                        sub_answer[3] = cursor_y
+                else:
+                    if last_valid >= 0:  # 保存answer区间，并将last_valid复位
+                        last_valid = -1
+                        all_sub_answer.append(sub_answer)
+
+                # 遍历到终点需要额外判断一次：游标是rect的左下角点
+                if isValid and cursor_y == int((room_graph[3][1] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
-            # 遍历到终点需要额外判断一次：游标是rect的左下角点
-            if isValid and cursor_y == int((room_graph[3][1] - 0.9) * self.gridScale):
-                all_sub_answer.append(sub_answer)
-
-        return all_sub_answer
+            return all_sub_answer
+        except Exception as e:
+            print(e)
 
     def getTopSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
 
-        # 搜索与客厅上边接触的可行空间：游标是rect的左下角点
-        start_x = max(room_graph[3][0] - (rect_width - 0.9), 0)
-        start_y = room_graph[3][1]
-        cursor_y = int(start_y * self.gridScale)
-        last_valid = -1
-        sub_answer = []
-        for cursor_x in range(int(start_x * self.gridScale), int((room_graph[2][0] - 0.9) * self.gridScale) + 1):
-            if self.gridY - start_y < rect_height:
-                break  # 探索区域容不下rect，直接退出
+        try:
+            # 搜索与客厅上边接触的可行空间：游标是rect的左下角点
+            start_x = max(room_graph[3][0] - (rect_width - 0.9), 0)
+            start_y = room_graph[3][1]
+            cursor_y = int(start_y * self.gridScale)
+            last_valid = -1
+            sub_answer = []
+            for cursor_x in range(int(start_x * self.gridScale), int((room_graph[2][0] - 0.9) * self.gridScale) + 1):
+                if self.gridY - start_y < rect_height:
+                    break  # 探索区域容不下rect，直接退出
 
-            # 判断当前角点pos是否合法，更新可行区间
-            isValid = True
-            if cursor_x + int(rect_width * self.gridScale) > self.gridX* self.gridScale:
-                isValid = False
-            else:
-                for cursor in range(cursor_x, cursor_x + int(rect_width * self.gridScale) + 1):
-                    if self.grids[cursor, cursor_y + 1] == 1:
-                        isValid = False
-                        break
-            if isValid:
-                if last_valid < 0:  # 创建新的answer区间
-                    sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
-                    last_valid = cursor_x
-                else:  # 更新answer区间
-                    sub_answer[1] = cursor_x
-            else:
-                if last_valid >= 0:  # 保存answer区间，并将last_valid复位
-                    last_valid = -1
+                # 判断当前角点pos是否合法，更新可行区间
+                isValid = True
+                if cursor_x + int(rect_width * self.gridScale) > self.gridX* self.gridScale:
+                    isValid = False
+                else:
+                    for cursor in range(cursor_x, cursor_x + int(rect_width * self.gridScale) + 1):
+                        if self.grids[cursor, cursor_y + 1] == 1:
+                            isValid = False
+                            break
+                if isValid:
+                    if last_valid < 0:  # 创建新的answer区间
+                        sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
+                        last_valid = cursor_x
+                    else:  # 更新answer区间
+                        sub_answer[1] = cursor_x
+                else:
+                    if last_valid >= 0:  # 保存answer区间，并将last_valid复位
+                        last_valid = -1
+                        all_sub_answer.append(sub_answer)
+
+                # 遍历到终点需要额外判断一次：游标是rect的左下角点
+                if isValid and cursor_x == int((room_graph[2][0] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
-            # 遍历到终点需要额外判断一次：游标是rect的左下角点
-            if isValid and cursor_x == int((room_graph[2][0] - 0.9) * self.gridScale):
-                all_sub_answer.append(sub_answer)
-
-        return all_sub_answer
+            return all_sub_answer
+        except Exception as e:
+            print(e)
 
     def getRightSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
 
-        # 搜索与客厅右边接触的可行空间：游标是rect的左下角点
-        start_x = room_graph[1][0]
-        start_y = max(room_graph[1][1] - (rect_height - 0.9), 0)
-        cursor_x = int(start_x * self.gridScale)
-        last_valid = -1
-        sub_answer = []
-        for cursor_y in range(int(start_y * self.gridScale), int((room_graph[2][1] - 0.9) * self.gridScale) + 1):
-            if self.gridX - start_x < rect_width:
-                break  # 探索区域容不下rect，直接退出
+        try:
+            # 搜索与客厅右边接触的可行空间：游标是rect的左下角点
+            start_x = room_graph[1][0]
+            start_y = max(room_graph[1][1] - (rect_height - 0.9), 0)
+            cursor_x = int(start_x * self.gridScale)
+            last_valid = -1
+            sub_answer = []
+            for cursor_y in range(int(start_y * self.gridScale), int((room_graph[2][1] - 0.9) * self.gridScale) + 1):
+                if self.gridX - start_x < rect_width:
+                    break  # 探索区域容不下rect，直接退出
 
-            # 判断当前角点pos是否合法，更新可行区间
-            isValid = True
-            if cursor_y + int(rect_height * self.gridScale) > self.gridY* self.gridScale:
-                isValid = False
-            else:
-                for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
-                    if self.grids[cursor_x + 1, cursor] == 1:
-                        isValid = False
-                        break
-            if isValid:
-                if last_valid < 0:  # 创建新的answer区间
-                    sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
-                    last_valid = cursor_y
-                else:  # 更新answer区间
-                    sub_answer[3] = cursor_y
-            else:
-                if last_valid >= 0:  # 保存answer区间，并将last_valid复位
-                    last_valid = -1
+                # 判断当前角点pos是否合法，更新可行区间
+                isValid = True
+                if cursor_y + int(rect_height * self.gridScale) > self.gridY* self.gridScale:
+                    isValid = False
+                else:
+                    for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
+                        if self.grids[cursor_x + 1, cursor] == 1:
+                            isValid = False
+                            break
+                if isValid:
+                    if last_valid < 0:  # 创建新的answer区间
+                        sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
+                        last_valid = cursor_y
+                    else:  # 更新answer区间
+                        sub_answer[3] = cursor_y
+                else:
+                    if last_valid >= 0:  # 保存answer区间，并将last_valid复位
+                        last_valid = -1
+                        all_sub_answer.append(sub_answer)
+
+                # 遍历到终点需要额外判断一次：游标是rect的左下角点
+                if isValid and cursor_y == int((room_graph[2][1] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
-            # 遍历到终点需要额外判断一次：游标是rect的左下角点
-            if isValid and cursor_y == int((room_graph[2][1] - 0.9) * self.gridScale):
-                all_sub_answer.append(sub_answer)
-
-        return all_sub_answer
+            return all_sub_answer
+        except Exception as e:
+            print(e)
 
     def getDownSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
 
-        # 搜索与客厅下边接触的可行空间：游标是rect的左上角点
-        start_x = max(room_graph[0][0] - (rect_width - 0.9), 0)
-        start_y = room_graph[0][1]
-        cursor_y = int(start_y * self.gridScale)
-        last_valid = -1
-        sub_answer = []
-        for cursor_x in range(int(start_x * self.gridScale), int((room_graph[1][0] - 0.9) * self.gridScale) + 1):
-            if start_y < rect_height:
-                break  # 探索区域容不下rect，直接退出
+        try:
+            # 搜索与客厅下边接触的可行空间：游标是rect的左上角点
+            start_x = max(room_graph[0][0] - (rect_width - 0.9), 0)
+            start_y = room_graph[0][1]
+            cursor_y = int(start_y * self.gridScale)
+            last_valid = -1
+            sub_answer = []
+            for cursor_x in range(int(start_x * self.gridScale), int((room_graph[1][0] - 0.9) * self.gridScale) + 1):
+                if start_y < rect_height:
+                    break  # 探索区域容不下rect，直接退出
 
-            # 判断当前角点pos是否合法，更新可行区间
-            isValid = True
-            if cursor_x + int(rect_width * self.gridScale) > self.gridX* self.gridScale:
-                isValid = False
-            else:
-                for cursor in range(cursor_x, cursor_x + int(rect_width * self.gridScale) + 1):
-                    if self.grids[cursor, cursor_y] == 1:
-                        isValid = False
-                        break
-            if isValid:
-                if last_valid < 0:  # 创建新的answer区间
-                    sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
-                    last_valid = cursor_x
-                else:  # 更新answer区间
-                    sub_answer[1] = cursor_x
-            else:
-                if last_valid >= 0:  # 保存answer区间，并将last_valid复位
-                    last_valid = -1
+                # 判断当前角点pos是否合法，更新可行区间
+                isValid = True
+                if cursor_x + int(rect_width * self.gridScale) > self.gridX* self.gridScale:
+                    isValid = False
+                else:
+                    for cursor in range(cursor_x, cursor_x + int(rect_width * self.gridScale) + 1):
+                        if self.grids[cursor, cursor_y] == 1:
+                            isValid = False
+                            break
+                if isValid:
+                    if last_valid < 0:  # 创建新的answer区间
+                        sub_answer = [cursor_x, cursor_x, cursor_y, cursor_y]
+                        last_valid = cursor_x
+                    else:  # 更新answer区间
+                        sub_answer[1] = cursor_x
+                else:
+                    if last_valid >= 0:  # 保存answer区间，并将last_valid复位
+                        last_valid = -1
+                        all_sub_answer.append(sub_answer)
+
+                # 遍历到终点需要额外判断一次：游标是rect的左下角点
+                if isValid and cursor_x == int((room_graph[1][0] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
-            # 遍历到终点需要额外判断一次：游标是rect的左下角点
-            if isValid and cursor_x == int((room_graph[1][0] - 0.9) * self.gridScale):
-                all_sub_answer.append(sub_answer)
-
-        return all_sub_answer
+            return all_sub_answer
+        except Exception as e:
+            print(e)
 
     # 返回{0:{["down":[low_x, high_x, low_y, high_y],...];"right":[[xxx]...];1:[xxx...]}}，每个元素竖放的可行域空间，和横放的可行域空间
     def searchValidSpace(self, rect_width, rect_height):
@@ -417,111 +432,117 @@ class Calculator(threading.Thread, pack_1D):
         select_num = 0
         select_fun = "down"
 
-        # 统计区间长度
-        length_count_all = [0, 0]
-        length_count_sub = {0: [0, 0, 0, 0], 1: [0, 0, 0, 0]}
-        for i in range(2):
-            for v in answer[i]["down"]:
-                length_count_all[i] += v[1] - v[0] + v[3] - v[2]
-                length_count_sub[i][0] += v[1] - v[0] + v[3] - v[2]
-            for v in answer[i]["right"]:
-                length_count_all[i] += v[1] - v[0] + v[3] - v[2]
-                length_count_sub[i][1] += v[1] - v[0] + v[3] - v[2]
-            for v in answer[i]["top"]:
-                length_count_all[i] += v[1] - v[0] + v[3] - v[2]
-                length_count_sub[i][2] += v[1] - v[0] + v[3] - v[2]
-            for v in answer[i]["left"]:
-                length_count_all[i] += v[1] - v[0] + v[3] - v[2]
-                length_count_sub[i][3] += v[1] - v[0] + v[3] - v[2]
-
-        # 如果可行空间不存在，直接退出
-        length_sum = length_count_all[0] + length_count_all[1]
-        if length_sum == 0:
-            return select
-
-        # 1.选择摆放方向
-        rand_t_1 = np.random.random()  #0-1之间抽样随机数
-        if rand_t_1 <= length_count_all[0] / length_sum:
-            select_num = 0
-        else:
-            select_num = 1
-
-        # 2.选择上/下/左/右
-        rand_t_2 = np.random.random()  # 0-1之间抽样随机数
-        a = sum(length_count_sub[select_num][:1]) / length_count_all[select_num]
-        if rand_t_2 >=0 and rand_t_2 <= sum(length_count_sub[select_num][:1]) / length_count_all[select_num]:
-            select_fun = "down"
-        elif rand_t_2 > sum(length_count_sub[select_num][:1]) / length_count_all[select_num] and rand_t_2 <= sum(length_count_sub[select_num][:2]) / length_count_all[select_num]:
-            select_fun = "right"
-        elif rand_t_2 > sum(length_count_sub[select_num][:2]) / length_count_all[select_num] and rand_t_2 <= sum(length_count_sub[select_num][:3]) / length_count_all[select_num]:
-            select_fun = "top"
-        elif rand_t_2 > sum(length_count_sub[select_num][:3]) / length_count_all[select_num] and rand_t_2 <= 1:
-            select_fun = "left"
-
-        # 3.选择具体区间
-        length_count = []
-        for v in answer[select_num][select_fun]:
-            length_count.append(v[1] - v[0] + v[3] - v[2])
-        rand_t_3 = np.random.random()  # 0-1之间抽样随机数
-        for i in range(len(length_count)):
-            if rand_t_3>= sum(length_count[:i]) / sum(length_count) and rand_t_2 <= sum(length_count[:i + 1]) / sum(length_count):
-                select = [select_num, select_fun, answer[select_num][select_fun][i]]
-                break
-
-        if len(select) == 0:
-            check = True
-        return select
-
-    def place_rect_rand(self):
-        # 1.在客厅的可行解空间随机选取一个位置放置
-        self.place_living_room()
-
-        # 2.利用GA算法打乱后续元素的排列顺序
-        remain_rects = []
-        for v in self.rects:
-            if v[1] != self.room:  # 找出客厅
-                remain_rects.append(v)
-        arr = np.array(range(0, len(remain_rects), 1))
-        np.random.shuffle(arr)  # 暂时使用随机打乱顺序，后续使用GA，但是困扰是GA优化的目标是什么？
-
-        # 3.按照排列顺序，对于当前排列的每个元素，在其可行解空间中随机选取一个位置放置
-        for i in arr:
-            rect = remain_rects[i]
-            print(rect)
-            graph = rect[3]
-            l = graph[2][0] - graph[0][0]  # 长度
-            h = graph[2][1] - graph[0][1]  # 高度
-            # 随机探索可行位置：找出围绕客厅的4个可行域(无可行域时此轮方案直接结束，重新从客厅开始)->随机选定一个可行域->使用randPos选定摆放位置。
-            answer = self.searchValidSpace(l,h)
-            print("answer: ", answer)
-            select = self.selectOneSpace(answer)
-            print("select: ", select)
+        try:
+            # 统计区间长度
+            length_count_all = [0, 0]
+            length_count_sub = {0: [0, 0, 0, 0], 1: [0, 0, 0, 0]}
+            for i in range(2):
+                for v in answer[i]["down"]:
+                    length_count_all[i] += v[1] - v[0] + v[3] - v[2]
+                    length_count_sub[i][0] += v[1] - v[0] + v[3] - v[2]
+                for v in answer[i]["right"]:
+                    length_count_all[i] += v[1] - v[0] + v[3] - v[2]
+                    length_count_sub[i][1] += v[1] - v[0] + v[3] - v[2]
+                for v in answer[i]["top"]:
+                    length_count_all[i] += v[1] - v[0] + v[3] - v[2]
+                    length_count_sub[i][2] += v[1] - v[0] + v[3] - v[2]
+                for v in answer[i]["left"]:
+                    length_count_all[i] += v[1] - v[0] + v[3] - v[2]
+                    length_count_sub[i][3] += v[1] - v[0] + v[3] - v[2]
 
             # 如果可行空间不存在，直接退出
-            if len(select) == 0:
-                break
+            length_sum = length_count_all[0] + length_count_all[1]
+            if length_sum == 0:
+                return select
 
-            # 根据select的区间随机选定rect位置
-            pos_x = self.randPos(select[2][0], select[2][1])
-            pos_y = self.randPos(select[2][2], select[2][3])
-            if select[0] == 1:  # 选择横放
-                l, h  = h, l
-            new_graph = []
-            if select[1] == "down":
-                new_graph = self.getGraphByLeftTop(l, h, pos_x, pos_y)
-            elif select[1] == "right":
-                new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
-            elif select[1] == "top":
-                new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
-            elif select[1] == "left":
-                new_graph = self.getGraphByRightDown(l, h, pos_x, pos_y)
-            # Xc, Yc分别是所放置矩形的形心(矩形各节点坐标求均值所得)横坐标和纵坐标，y_max是矩形各节点坐标在纵向上的最大高度
-            Xc, Yc, y_max = self.caculateCenter(0, new_graph)  # 旋转后的形心
-            # 刷新正在排样的图形：往已有视图中添加该矩形
-            self.refreshData([Yc, y_max, Xc, 0, new_graph, rect[1], rect[0]],
-                             save=True)  # [[Yc, y_max, Xc, gender, location, num, s],..]
-            self.saveData([Yc, y_max, Xc, 0, new_graph, rect[1], rect[0]])
-            self.bestChoice = copy.deepcopy(self.settledPoints)  # 保存排列结果
+            # 1.选择摆放方向
+            rand_t_1 = np.random.random()  #0-1之间抽样随机数
+            if rand_t_1 <= length_count_all[0] / length_sum:
+                select_num = 0
+            else:
+                select_num = 1
+
+            # 2.选择上/下/左/右
+            rand_t_2 = np.random.random()  # 0-1之间抽样随机数
+            a = sum(length_count_sub[select_num][:1]) / length_count_all[select_num]
+            if rand_t_2 >=0 and rand_t_2 <= sum(length_count_sub[select_num][:1]) / length_count_all[select_num]:
+                select_fun = "down"
+            elif rand_t_2 > sum(length_count_sub[select_num][:1]) / length_count_all[select_num] and rand_t_2 <= sum(length_count_sub[select_num][:2]) / length_count_all[select_num]:
+                select_fun = "right"
+            elif rand_t_2 > sum(length_count_sub[select_num][:2]) / length_count_all[select_num] and rand_t_2 <= sum(length_count_sub[select_num][:3]) / length_count_all[select_num]:
+                select_fun = "top"
+            elif rand_t_2 > sum(length_count_sub[select_num][:3]) / length_count_all[select_num] and rand_t_2 <= 1:
+                select_fun = "left"
+
+            # 3.选择具体区间
+            length_count = []
+            for v in answer[select_num][select_fun]:
+                length_count.append(v[1] - v[0] + v[3] - v[2])
+            rand_t_3 = np.random.random()  # 0-1之间抽样随机数
+            for i in range(len(length_count)):
+                if rand_t_3>= sum(length_count[:i]) / sum(length_count) and rand_t_2 <= sum(length_count[:i + 1]) / sum(length_count):
+                    select = [select_num, select_fun, answer[select_num][select_fun][i]]
+                    break
+
+            if len(select) == 0:
+                check = True
+            return select
+        except Exception as e:
+            print(e)
+
+    def place_rect_rand(self):
+        try:
+            # 1.在客厅的可行解空间随机选取一个位置放置
+            self.place_living_room()
+
+            # 2.利用GA算法打乱后续元素的排列顺序
+            remain_rects = []
+            for v in self.rects:
+                if v[1] != self.room:  # 找出客厅
+                    remain_rects.append(v)
+            arr = np.array(range(0, len(remain_rects), 1))
+            np.random.shuffle(arr)  # 暂时使用随机打乱顺序，后续使用GA，但是困扰是GA优化的目标是什么？
+
+            # 3.按照排列顺序，对于当前排列的每个元素，在其可行解空间中随机选取一个位置放置
+            for i in arr:
+                rect = remain_rects[i]
+                print(rect)
+                graph = rect[3]
+                l = graph[2][0] - graph[0][0]  # 长度
+                h = graph[2][1] - graph[0][1]  # 高度
+                # 随机探索可行位置：找出围绕客厅的4个可行域(无可行域时此轮方案直接结束，重新从客厅开始)->随机选定一个可行域->使用randPos选定摆放位置。
+                answer = self.searchValidSpace(l,h)
+                print("answer: ", answer)
+                select = self.selectOneSpace(answer)
+                print("select: ", select)
+
+                # 如果可行空间不存在，直接退出
+                if len(select) == 0:
+                    break
+
+                # 根据select的区间随机选定rect位置
+                pos_x = self.randPos(select[2][0], select[2][1])
+                pos_y = self.randPos(select[2][2], select[2][3])
+                if select[0] == 1:  # 选择横放
+                    l, h  = h, l
+                new_graph = []
+                if select[1] == "down":
+                    new_graph = self.getGraphByLeftTop(l, h, pos_x, pos_y)
+                elif select[1] == "right":
+                    new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
+                elif select[1] == "top":
+                    new_graph = self.getGraphByLeftDown(l, h, pos_x, pos_y)
+                elif select[1] == "left":
+                    new_graph = self.getGraphByRightDown(l, h, pos_x, pos_y)
+                # Xc, Yc分别是所放置矩形的形心(矩形各节点坐标求均值所得)横坐标和纵坐标，y_max是矩形各节点坐标在纵向上的最大高度
+                Xc, Yc, y_max = self.caculateCenter(0, new_graph)  # 旋转后的形心
+                # 刷新正在排样的图形：往已有视图中添加该矩形
+                self.refreshData([Yc, y_max, Xc, 0, new_graph, rect[1], rect[0]],
+                                 save=True)  # [[Yc, y_max, Xc, gender, location, num, s],..]
+                self.saveData([Yc, y_max, Xc, 0, new_graph, rect[1], rect[0]])
+                self.bestChoice = copy.deepcopy(self.settledPoints)  # 保存排列结果
+        except Exception as e:
+            print(e)
 
     # 形心/三个点的y值和最低
     def caculateCenter(self, gender, location=None):
@@ -797,28 +818,30 @@ class Calculator(threading.Thread, pack_1D):
         :return:
         '''
         #print("refreshData")
+        try:
+            # 获取互斥锁后，进程只能在释放锁后下个进程才能进来
+            self.mutex.acquire()
 
-        # 获取互斥锁后，进程只能在释放锁后下个进程才能进来
-        self.mutex.acquire()
+            # 更新optpoints
+            k = [chosenOne[6], chosenOne[5], chosenOne[3], chosenOne[4]]
+            if not delMode:
+                try:
+                    self.optpoints.remove(self.pastPoint)
+                    self.optpoints.append(k)  # optpoint:[[s, num, gender, [[], [], [], []]], ..]
+                except Exception:
+                    self.optpoints.append(k)  # optpoint:[[s, num, gender, [[], [], [], []]], ..]
 
-        # 更新optpoints
-        k = [chosenOne[6], chosenOne[5], chosenOne[3], chosenOne[4]]
-        if not delMode:
-            try:
-                self.optpoints.remove(self.pastPoint)
-                self.optpoints.append(k)  # optpoint:[[s, num, gender, [[], [], [], []]], ..]
-            except Exception:
-                self.optpoints.append(k)  # optpoint:[[s, num, gender, [[], [], [], []]], ..]
-
-            if not save:
-                self.pastPoint = k
+                if not save:
+                    self.pastPoint = k
+                else:
+                    self.pastPoint = []
             else:
-                self.pastPoint = []
-        else:
-            self.optpoints.remove(k)
+                self.optpoints.remove(k)
 
-        # 互斥锁必须被释放掉
-        self.mutex.release()
+            # 互斥锁必须被释放掉
+            self.mutex.release()
+        except Exception as e:
+            print(e)
 
     def pause(self):
         self.__flag.clear()
@@ -833,28 +856,31 @@ class Calculator(threading.Thread, pack_1D):
         :param location:
         :return:
         '''
-        location = chosenOne[4]
-        num = chosenOne[5]
-        gender = chosenOne[3]
+        try:
+            location = chosenOne[4]
+            num = chosenOne[5]
+            gender = chosenOne[3]
 
-        y_max = max(location, key=lambda x: x[1])
-        if not delMode:
-            # 保存图形
-            self.settledPoints.append(chosenOne)  # settledPoints:[[Yc, y_max, Xc, gender, location, num, s], ..]
-            # 保存最高线
-            self.y_list.append([y_max[1], num])  # y_max列表：[[y_max, num], [], []..]
-            # 刷新栅格
-            self.refreshGrid(gender, location)
-        else:
-            # 删除图形
-            self.settledPoints.remove(chosenOne)
-            # 删除最高线
-            self.y_list.remove([y_max[1], num])
+            y_max = max(location, key=lambda x: x[1])
+            if not delMode:
+                # 保存图形
+                self.settledPoints.append(chosenOne)  # settledPoints:[[Yc, y_max, Xc, gender, location, num, s], ..]
+                # 保存最高线
+                self.y_list.append([y_max[1], num])  # y_max列表：[[y_max, num], [], []..]
+                # 刷新栅格
+                self.refreshGrid(gender, location)
+            else:
+                # 删除图形
+                self.settledPoints.remove(chosenOne)
+                # 删除最高线
+                self.y_list.remove([y_max[1], num])
 
-            self.refreshGrid(gender, location, delMode=True)
+                self.refreshGrid(gender, location, delMode=True)
 
-        self.y_list.sort(reverse=True)
-        return self.y_list[0][0]  # 返回y_max
+            self.y_list.sort(reverse=True)
+            return self.y_list[0][0]  # 返回y_max
+        except Exception as e:
+            print(e)
 
     def sortData(self, graphs):
         '''
@@ -883,16 +909,19 @@ class Calculator(threading.Thread, pack_1D):
 
     # 上传（刷新）数据
     def uploadData(self):
-        print("uploadData")
-        # 获取互斥锁后，进程只能在释放锁后下个进程才能进来
-        self.mutex.acquire()
+        #print("uploadData")
+        try:
+            # 获取互斥锁后，进程只能在释放锁后下个进程才能进来
+            self.mutex.acquire()
 
-        optpoints_data, stop = copy.deepcopy(self.optpoints), self.finishFlag
+            optpoints_data, stop = copy.deepcopy(self.optpoints), self.finishFlag
 
-        # 互斥锁必须被释放掉
-        self.mutex.release()
+            # 互斥锁必须被释放掉
+            self.mutex.release()
 
-        return optpoints_data, stop
+            return optpoints_data, stop
+        except Exception as e:
+            print(e)
 
     # 下载数据，入口函数
     def downloadData(self, iptpoints):

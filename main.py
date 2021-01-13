@@ -4,10 +4,10 @@ import sys, threading, os
 import time
 from PIL import ImageGrab
 import os
-
+import copy
 from PyQt5 import QtWidgets, QtGui, QtCore
 from ui.suu import *
-
+from itertools import combinations
 from boxing import boxing
 
 
@@ -87,13 +87,13 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
     #         text = '请点击矩形框内以获取坐标'
     #     self.label_3.setText(text)
 
-    def closeEvent(self, event):
-        '''
-        重写主窗口退出事件，使退出的时候关闭主线程,即t2
-        :param event:
-        :return:
-        '''
-        os._exit(0)
+    # def closeEvent(self, event):
+    #     '''
+    #     重写主窗口退出事件，使退出的时候关闭主线程,即t2
+    #     :param event:
+    #     :return:
+    #     '''
+    #     os._exit(0)
 
     # 绘图事件
     def paintEvent(self, a0: QtGui.QPaintEvent):
@@ -217,6 +217,162 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.lineEdit.setText(self.readurl)
         self.statusBar.showMessage('    状态：选择读取路径中...')
 
+    def getArea(self, path):
+        area = 0.0
+        for v in path:
+            area += v[0]
+        return area
+
+    def dfs(self, rects_all, S, n, idx, path, path_all):
+        if idx == n:
+            return
+
+        for i in range(len(rects_all[idx])):
+            path.append(rects_all[idx][i])
+            if idx == n - 1:
+                area = self.getArea(path)
+                if area > S:
+                    path.pop()
+                    continue
+                path_all.append([area, copy.deepcopy(path)])
+            self.dfs(rects_all, S, n, idx + 1, path, path_all)
+            path.pop()
+
+    def dfs2(self, rects_all, S, n, idx, path, path_all, limit_key, limit_value):
+        if idx == n:
+            return
+
+        slections = rects_all[idx]
+        if idx == limit_key:
+            slections = list(combinations(rects_all[idx], limit_value))
+
+        for i in range(len(slections)):
+            if type(slections[i]) == type((1, 2)):
+                path.extend(list(slections[i]))
+            else:
+                path.append(slections[i])
+            if idx == n - 1:
+                area = self.getArea(path)
+                if area > S:
+                    if type(slections[i]) == type((1, 2)):
+                        for i in range(len(list(slections[i]))):
+                            path.pop()
+                    else:
+                        path.pop()
+                    continue
+                path_all.append([area, copy.deepcopy(path)])
+            self.dfs2(rects_all, S, n, idx + 1, path, path_all, limit_key, limit_value)
+            if type(slections[i]) == type((1, 2)):
+                for i in range(len(list(slections[i]))):
+                    path.pop()
+            else:
+                path.pop()
+
+    def dfs3(self, rects_all, S, n, idx, path, path_all, limit):
+        if idx == n:
+            return
+
+        slections = rects_all[idx]
+        if idx in limit.keys():
+            slections = list(combinations(rects_all[idx], limit[idx]))
+
+        for i in range(len(slections)):
+            if type(slections[i]) == type((1, 2)):
+                path.extend(list(slections[i]))
+            else:
+                path.append(slections[i])
+            if idx == n - 1:
+                area = self.getArea(path)
+                if area > S:
+                    if type(slections[i]) == type((1, 2)):
+                        for i in range(len(list(slections[i]))):
+                            path.pop()
+                    else:
+                        path.pop()
+                    continue
+                path_all.append([area, copy.deepcopy(path)])
+            self.dfs3(rects_all, S, n, idx + 1, path, path_all, limit)
+            if type(slections[i]) == type((1, 2)):
+                for i in range(len(list(slections[i]))):
+                    path.pop()
+            else:
+                path.pop()
+
+    # 根据箱子面积搜索能塞下的具有最小剩余面积的rects组合
+    def searchBestRects(self, S, limit):
+        best_rects = []
+
+        # 计算面积，每行按面积从小到大排序
+        rects_all = []
+        rect_count = 0
+        for key in self.data.keys():
+            rects_sub = []
+            for i in range(0, len(self.data[key]), 2):
+                self.keyMap[rect_count] = key + str(int(i/2 + 1))
+                rects_sub.append([self.data[key][i]*self.data[key][i+1], rect_count, self.data[key][i], self.data[key][i+1]])
+                rect_count += 1
+            # list按面积大小从小到达排序
+            rects_sub.sort()
+            rects_all.append(rects_sub)
+
+        # 按照限定总面积，找出使得具有最小剩余面积的rects组合
+        possible_rects = []
+        path = []
+        self.dfs(rects_all, S, len(rects_all), 0, path, possible_rects)
+
+        # # 根据limit，例如：卫浴可以继续添加一个，卧室可以继续添加两个
+        # for limit_key in limit.keys():
+        #     # 单种限制
+        #     for limit_count in range(2,limit[limit_key] + 1, 1):
+        #         new_possible_rects = []
+        #         new_path = []
+        #         self.dfs2(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_key, limit_count)
+        #         possible_rects.extend(new_possible_rects)
+        # # 组合限制
+        # limit_1 = {0:2, 2:2}
+        # limit_2 = {0:2, 2:3}
+        # new_possible_rects = []
+        # new_path = []
+        # self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_1)
+        # possible_rects.extend(new_possible_rects)
+        # new_possible_rects = []
+        # new_path = []
+        # self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_2)
+        # possible_rects.extend(new_possible_rects)
+
+        # 筛选出具有最小剩余面积的模块组合
+        possible_rects.sort(reverse=True)
+        best_area = possible_rects[0][0]
+        for v in possible_rects:
+            if v[0] == best_area:
+                best_rects.append(v)
+            else:
+                break
+
+        # # 调试用，待删除
+        # best_area = possible_rects[0][0] - 20
+        # for v in possible_rects:
+        #     if v[0] >= best_area - 2 and v[0] <= best_area :
+        #         best_rects.append(v)
+        #     elif v[0] < best_area - 2:
+        #         break
+
+        # 输出方案信息
+        print("Total number of combinations = ", len(possible_rects))
+        print("best remain area = ", S - best_area, ", Number of best combinations = ", len(best_rects))
+        print(best_rects)
+        file = open('data.txt', 'w')
+        file.write("Total number of combinations = " + str(len(possible_rects)) + "\n")
+        file.write("best remain area = " + str(S - best_area) + ", Number of best combinations = " + str(len(best_rects)) + "\n")
+        file.write(str(best_rects))
+        file.close()
+
+        return best_rects
+
+    # 根据限定剩余面积搜索出符合要求的rects组合
+    def searchPossibleRects(self, S, M):
+        return []
+
     # 确认读取
     def confirmLoad(self):
         self.data = {}
@@ -247,6 +403,10 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             self.boxs = list(map(float, location))
             self.boxStr = location[0] + "x" + location[1] + "x" + location[2]
 
+            # 计算符合占地面积要求的模块组合方案
+            limit = {0:2, 2:3}      # 卫浴最多可以2个，卧室最多可以3个
+            best_rects = self.searchBestRects(self.boxs[0]*self.boxs[1]*self.boxs[2], limit)
+
             # 设置图框大小
             a = min(self.boxs[0], self.boxs[1])*self.boxs[2]
             b = max(self.boxs[0], self.boxs[1])
@@ -255,20 +415,31 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             self.h = min(a, b)
             self.scale = 350/self.l
 
-            # 加载选择的矩形数据
-            num = 0
-            for key in self.select.keys():
+            # # 加载选择的矩形数据
+            # num = 0
+            # for key in self.select.keys():
+            #     gender = 0
+            #     idxList = self.select[key]
+            #     for idx in idxList:
+            #         width = self.data[key][2 * idx]
+            #         height = self.data[key][2 * idx + 1]
+            #         dumped_location = [[0, 0], [width, 0], [width, height], [0, height]]
+            #         if key == 'D':
+            #             calculator.setRoom(num)
+            #         self.iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
+            #         self.keyMap[num] = key + str(idx + 1)
+            #         num = num + 1  # 图形编号
+
+            # 从bestRects选择矩形数据
+            for v in best_rects[0][1]:
                 gender = 0
-                idxList = self.select[key]
-                for idx in idxList:
-                    width = self.data[key][2 * idx]
-                    height = self.data[key][2 * idx + 1]
-                    dumped_location = [[0, 0], [width, 0], [width, height], [0, height]]
-                    if key == 'D':
-                        calculator.setRoom(num)
-                    self.iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
-                    self.keyMap[num] = key + str(idx + 1)
-                    num = num + 1  # 图形编号
+                num = v[1]
+                width = v[2]
+                height = v[3]
+                dumped_location = [[0, 0], [width, 0], [width, height], [0, height]]
+                self.iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
+                if 'D' in self.keyMap[num]:
+                    calculator.setRoom(num)
 
             self.pushButton_3.setEnabled(True)
             self.statusBar.showMessage('    成功读取文件!!: ' + self.readurl)
@@ -338,9 +509,9 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.runningTime = 0
         self.update()
 
-        self.data.clear()
-        self.select.clear()
-        self.keyMap.clear()
+        #self.data.clear()
+        #self.select.clear()
+        #self.keyMap.clear()
         #self.pic_count = 0
 
         self.pushButton_1.setEnabled(True)
@@ -360,8 +531,8 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
         # 清除
         self.clear()
-        # 确定
-        self.confirmLoad()
+        # # 确定
+        # self.confirmLoad()
         # 开始
         self.run_()
 
@@ -375,7 +546,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
     def pause(self):
         #self.pushButton.setText('继续')
         self.pushButton_4.setEnabled(True)
-        self.statusBar.showMessage('    状态：暂停中...')
+        #self.statusBar.showMessage('    状态：暂停中...')
 
         self.__flag.clear()
         calculator.pause()
@@ -387,30 +558,33 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
             time.sleep(self.timeInterval)
 
-            # 实时更新数据
-            self.optpoints, stop = calculator.uploadData()    # [[s, num, gender, [[], [], [], []]], ..]
-            self.optpoints.reverse()
-            if len(self.optpoints)>0 and len(self.optpoints) != 1 and self.optpoints[0][1] == self.optpoints[1][1]:
-                self.optpoints.pop(0)
+            try:
+                # 实时更新数据
+                self.optpoints, stop = calculator.uploadData()    # [[s, num, gender, [[], [], [], []]], ..]
+                self.optpoints.reverse()
+                if len(self.optpoints)>0 and len(self.optpoints) != 1 and self.optpoints[0][1] == self.optpoints[1][1]:
+                    self.optpoints.pop(0)
 
-            # 刷新时间
-            self.now = time.time() # 记录现在时间戳
-            k = time.localtime(self.now - self.startTime + self.runningTime)
-            self.label_2.setText('用时:' + str(time.strftime('%M:%S', k)))
+                # 刷新时间
+                self.now = time.time() # 记录现在时间戳
+                k = time.localtime(self.now - self.startTime + self.runningTime)
+                self.label_2.setText('用时:' + str(time.strftime('%M:%S', k)))
 
-            self.update()
-            if stop:
-                self.pushButton_2.setEnabled(True)
-                self.statusBar.showMessage('    状态：计算完成...(请选择 保存数据/清除图形)')
-                self.__globalFlag.clear()
-                self.__globalFlag.wait()  # 结束
-                # 保存截图
-                path = "results\\" + self.boxStr
-                if os.path.exists(path) == False:
-                    os.mkdir(path)  # 创建目录
-                pic = ImageGrab.grab((1100, 500, 1500, 800))
-                pic.save(path + "\\" + str(self.pic_count) + ".jpg")
-                self.pic_count += 1
+                self.update()
+                if stop:
+                    self.pushButton_2.setEnabled(True)
+                    self.statusBar.showMessage('    状态：计算完成...(请选择 保存数据/清除图形)')
+                    self.__globalFlag.clear()
+                    self.__globalFlag.wait()  # 结束
+                    # 保存截图
+                    path = "results\\" + self.boxStr
+                    if os.path.exists(path) == False:
+                        os.mkdir(path)  # 创建目录
+                    pic = ImageGrab.grab((1100, 500, 1500, 850))
+                    pic.save(path + "\\" + str(self.pic_count) + ".jpg")
+                    self.pic_count += 1
+            except Exception as e:
+                print(e)
 
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
