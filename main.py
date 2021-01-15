@@ -23,7 +23,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.qp = QtGui.QPainter()  # 画布
         self.readurl = ''
         self.loadurl = ''
-        self.timeInterval = 0.01   # 画布刷新间隔：1为1s/0.001为 1ms
+        self.timeInterval = 0.1   # 画布刷新间隔：1为1s/0.001为 1ms
         self.now = time.time()
         self.startTime = time.time()   # 记录开始的时间戳
         self.pauseTime = 0
@@ -36,7 +36,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.origin = (550, 120)   # 画布原点
         self.l = 30.0 # 绘图区域长
         self.h = 40.0 # 绘图区域高
-        self.scale = 8  # 缩放比例
+        self.scale = 10  # 缩放比例
         self.iptpoints = []  # 读取的数据点: [[num, gender, [[0, 0], [0, 0], [0, 0], [0, 0]]], ...]
         self.optpoints = [[0, 0, -1, [[0,0], [0,0], [0,0]]]]  # 输出的数据点: [[s, num, gender, [[], [], [], []]], ..]
         self.fullLine = 0  # 100利用率线
@@ -47,6 +47,8 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.keyMap = {}    # num对应的字符串标识
         self.pic_count = 0  # 结果计数
         self.boxStr = ""
+        self.possible_rects = []
+        self.best_rects = []
 
         self.setupUi(self)
         self.buttonEvent()
@@ -141,31 +143,31 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             co00 = QtGui.QColor(self.co_rect)
             self.qp.setPen(co0)
             self.qp.setBrush(co00)
-            points = [location[0][0] * scale + X, -location[0][1] * scale + Y,
-                      location[1][0] * scale + X, -location[1][1] * scale + Y,
-                      location[2][0] * scale + X, -location[2][1] * scale + Y,
-                      location[3][0] * scale + X, -location[3][1] * scale + Y,]
+            points = [int(location[0][0] * scale + X), int(-location[0][1] * scale + Y),
+                      int(location[1][0] * scale + X), int(-location[1][1] * scale + Y),
+                      int(location[2][0] * scale + X), int(-location[2][1] * scale + Y),
+                      int(location[3][0] * scale + X), int(-location[3][1] * scale + Y),]
             polygon = QtGui.QPolygon(points)
             self.qp.drawPolygon(polygon)
 
-            x = (location[0][0] * scale + location[1][0] * scale ) / 2 + X  # 标号的位置
-            y = -(location[0][1] * scale + location[2][1] * scale) / 2 + Y
-            self.qp.drawText(x, y, self.keyMap[num])
+            x = int((location[0][0] * scale + location[1][0] * scale ) / 2 + X)  # 标号的位置
+            y = int(-(location[0][1] * scale + location[2][1] * scale) / 2 + Y)
+            self.qp.drawText(x, y, self.keyMap[int(num)])
 
-        elif shape == 1:
-            co1 = QtGui.QColor(self.co_border)
-            co11 = QtGui.QColor(self.co_tri)
-            self.qp.setPen(co1)
-            self.qp.setBrush(co11)
-            points = [location[0][0] * scale + X, -location[0][1] * scale + Y,
-                      location[1][0] * scale + X, -location[1][1] * scale + Y,
-                      location[2][0] * scale + X, -location[2][1] * scale + Y]
-            polygon = QtGui.QPolygon(points)
-            self.qp.drawPolygon(polygon)
-
-            x = (location[0][0]+ location[1][0] + location[2][0]-3) * scale / 3 + X  # 标号的位置
-            y = -(location[0][1] + location[1][1] + location[2][1]-3) * scale / 3 + Y
-            self.qp.drawText(x, y, str(num))
+        # elif shape == 1:
+        #     co1 = QtGui.QColor(self.co_border)
+        #     co11 = QtGui.QColor(self.co_tri)
+        #     self.qp.setPen(co1)
+        #     self.qp.setBrush(co11)
+        #     points = [location[0][0] * scale + X, -location[0][1] * scale + Y,
+        #               location[1][0] * scale + X, -location[1][1] * scale + Y,
+        #               location[2][0] * scale + X, -location[2][1] * scale + Y]
+        #     polygon = QtGui.QPolygon(points)
+        #     self.qp.drawPolygon(polygon)
+        #
+        #     x = (location[0][0]+ location[1][0] + location[2][0]-3) * scale / 3 + X  # 标号的位置
+        #     y = -(location[0][1] + location[1][1] + location[2][1]-3) * scale / 3 + Y
+        #     self.qp.drawText(x, y, str(num))
         else:
             return
 
@@ -300,8 +302,6 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
     # 根据箱子面积搜索能塞下的具有最小剩余面积的rects组合
     def searchBestRects(self, S, limit):
-        best_rects = []
-
         # 计算面积，每行按面积从小到大排序
         rects_all = []
         rect_count = 0
@@ -316,36 +316,36 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             rects_all.append(rects_sub)
 
         # 按照限定总面积，找出使得具有最小剩余面积的rects组合
-        possible_rects = []
+        self.possible_rects = []
         path = []
-        self.dfs(rects_all, S, len(rects_all), 0, path, possible_rects)
+        self.dfs(rects_all, S, len(rects_all), 0, path, self.possible_rects)
 
-        # # 根据limit，例如：卫浴可以继续添加一个，卧室可以继续添加两个
-        # for limit_key in limit.keys():
-        #     # 单种限制
-        #     for limit_count in range(2,limit[limit_key] + 1, 1):
-        #         new_possible_rects = []
-        #         new_path = []
-        #         self.dfs2(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_key, limit_count)
-        #         possible_rects.extend(new_possible_rects)
-        # # 组合限制
-        # limit_1 = {0:2, 2:2}
-        # limit_2 = {0:2, 2:3}
-        # new_possible_rects = []
-        # new_path = []
-        # self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_1)
-        # possible_rects.extend(new_possible_rects)
-        # new_possible_rects = []
-        # new_path = []
-        # self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_2)
-        # possible_rects.extend(new_possible_rects)
+        # 根据limit，例如：卫浴可以继续添加一个，卧室可以继续添加两个
+        for limit_key in limit.keys():
+            # 单种限制
+            for limit_count in range(2,limit[limit_key] + 1, 1):
+                new_possible_rects = []
+                new_path = []
+                self.dfs2(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_key, limit_count)
+                self.possible_rects.extend(new_possible_rects)
+        # 组合限制
+        limit_1 = {0:2, 2:2}
+        limit_2 = {0:2, 2:3}
+        new_possible_rects = []
+        new_path = []
+        self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_1)
+        self.possible_rects.extend(new_possible_rects)
+        new_possible_rects = []
+        new_path = []
+        self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_2)
+        self.possible_rects.extend(new_possible_rects)
 
         # 筛选出具有最小剩余面积的模块组合
-        possible_rects.sort(reverse=True)
-        best_area = possible_rects[0][0]
-        for v in possible_rects:
+        self.possible_rects.sort(reverse=True)
+        best_area = self.possible_rects[0][0]
+        for v in self.possible_rects:
             if v[0] == best_area:
-                best_rects.append(v)
+                self.best_rects.append(v)
             else:
                 break
 
@@ -358,16 +358,15 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         #         break
 
         # 输出方案信息
-        print("Total number of combinations = ", len(possible_rects))
-        print("best remain area = ", S - best_area, ", Number of best combinations = ", len(best_rects))
-        print(best_rects)
+        print("S = ", S)
+        print("Total number of combinations = ", len(self.possible_rects))
+        print("Best remain area = ", best_area, ", Number of best combinations = ", len(self.best_rects))
+        #print(self.best_rects)
         file = open('data.txt', 'w')
-        file.write("Total number of combinations = " + str(len(possible_rects)) + "\n")
-        file.write("best remain area = " + str(S - best_area) + ", Number of best combinations = " + str(len(best_rects)) + "\n")
-        file.write(str(best_rects))
+        file.write("Total number of combinations = " + str(len(self.possible_rects)) + "\n")
+        file.write("best remain area = " + str(best_area) + ", Number of best combinations = " + str(len(self.best_rects)) + "\n")
+        file.write(str(self.best_rects))
         file.close()
-
-        return best_rects
 
     # 根据限定剩余面积搜索出符合要求的rects组合
     def searchPossibleRects(self, S, M):
@@ -391,21 +390,34 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             for i in readLines[1:total + 1]:
                 location = i.split(',')
                 self.data[location[0]] = list(map(float, location[2:]))
+            # location = readLines[total + 1].split(',')
+            # for i in location:
+            #     key = i[:1]
+            #     index = int(i[1:]) - 1
+            #     if key not in self.select.keys():
+            #         self.select[key] = [index]
+            #     else:
+            #         self.select[key].append(index)
             location = readLines[total + 1].split(',')
-            for i in location:
-                key = i[:1]
-                index = int(i[1:]) - 1
-                if key not in self.select.keys():
-                    self.select[key] = [index]
-                else:
-                    self.select[key].append(index)
-            location = readLines[total + 2].split(',')
             self.boxs = list(map(float, location))
             self.boxStr = location[0] + "x" + location[1] + "x" + location[2]
+            S = self.boxs[0]*self.boxs[1]*self.boxs[2]
+
+            # 读取约束条件
+            M_limit = []
+            location = readLines[total + 3].split(':')
+            M_limit_str = location[1].split(',')
+            for v in M_limit_str:
+                if '-' not in v:
+                    M_limit.append(float(v))
+                else:
+                    tmp = v.split('-')
+                    M_limit.append([float(tmp[0]), float(tmp[1])])
+            calculator.setLimit(S, M_limit)
 
             # 计算符合占地面积要求的模块组合方案
             limit = {0:2, 2:3}      # 卫浴最多可以2个，卧室最多可以3个
-            best_rects = self.searchBestRects(self.boxs[0]*self.boxs[1]*self.boxs[2], limit)
+            self.searchBestRects(S, limit)
 
             # 设置图框大小
             a = min(self.boxs[0], self.boxs[1])*self.boxs[2]
@@ -431,7 +443,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             #         num = num + 1  # 图形编号
 
             # 从bestRects选择矩形数据
-            for v in best_rects[0][1]:
+            for v in self.best_rects[0][1]:
                 gender = 0
                 num = v[1]
                 width = v[2]
@@ -485,6 +497,8 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
     # 保持对optpoint的刷新
     def run_(self):
+        calculator.downloadPossibleRects(self.possible_rects, self.best_rects, self.keyMap)
+
         print('running...')
         self.resume()
         self.pushButton_3.setEnabled(False) # 开始Annie
@@ -495,6 +509,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.pauseTime = time.time()
 
         self.fullLine = calculator.downloadData(self.iptpoints)
+
         self.__globalFlag.set()
 
     def clear(self):
@@ -552,9 +567,11 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         calculator.pause()
 
     def refreshData(self):
+        #return
         self.pause()    # 初始化就启动程序，但不开始扫描
         while self.__running.isSet():
             self.__flag.wait()
+            calculator.RedrawFlag.wait()
 
             time.sleep(self.timeInterval)
 
@@ -583,6 +600,8 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
                     pic = ImageGrab.grab((1100, 500, 1500, 850))
                     pic.save(path + "\\" + str(self.pic_count) + ".jpg")
                     self.pic_count += 1
+                calculator.RedrawFlag.clear()
+                calculator.RedrawOver.set()
             except Exception as e:
                 print(e)
 
