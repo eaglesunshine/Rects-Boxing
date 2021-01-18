@@ -45,10 +45,10 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.data = {}      # 矩形元素：{'A':[1.0, 2.0, ...], ...}
         self.select = {}    # 选择的元素：{'A':[1, 3,...],...}
         self.keyMap = {}    # num对应的字符串标识
-        self.pic_count = 0  # 结果计数
         self.boxStr = ""
         self.possible_rects = []
         self.best_rects = []
+        self.path = ""
 
         self.setupUi(self)
         self.buttonEvent()
@@ -172,8 +172,11 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             return
 
         # 刷新利用率
-        usage, y_max = self.get_usage()
+        usage, y_max, remain_area = self.get_usage()
         self.label.setText('利用率：' + str(usage) + '%')
+
+        # 刷新剩余面积
+        self.label_2.setText("剩余面积: " + str(remain_area))
 
         # # 显示警戒线
         # co2 = QtGui.QColor(self.co_alarmLine)
@@ -197,8 +200,9 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
         y_max = max(y_arr)
         usage = round(S / (self.l * self.h)*100, 2) # 利用率
+        remain_area = round(S, 2)
 
-        return usage, y_max
+        return usage, y_max, remain_area
 
     # 按钮触发
     def buttonEvent(self):
@@ -320,25 +324,25 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         path = []
         self.dfs(rects_all, S, len(rects_all), 0, path, self.possible_rects)
 
-        # 根据limit，例如：卫浴可以继续添加一个，卧室可以继续添加两个
-        for limit_key in limit.keys():
-            # 单种限制
-            for limit_count in range(2,limit[limit_key] + 1, 1):
-                new_possible_rects = []
-                new_path = []
-                self.dfs2(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_key, limit_count)
-                self.possible_rects.extend(new_possible_rects)
-        # 组合限制
-        limit_1 = {0:2, 2:2}
-        limit_2 = {0:2, 2:3}
-        new_possible_rects = []
-        new_path = []
-        self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_1)
-        self.possible_rects.extend(new_possible_rects)
-        new_possible_rects = []
-        new_path = []
-        self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_2)
-        self.possible_rects.extend(new_possible_rects)
+        # # 根据limit，例如：卫浴可以继续添加一个，卧室可以继续添加两个
+        # for limit_key in limit.keys():
+        #     # 单种限制
+        #     for limit_count in range(2,limit[limit_key] + 1, 1):
+        #         new_possible_rects = []
+        #         new_path = []
+        #         self.dfs2(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_key, limit_count)
+        #         self.possible_rects.extend(new_possible_rects)
+        # # 组合限制
+        # limit_1 = {0:2, 2:2}
+        # limit_2 = {0:2, 2:3}
+        # new_possible_rects = []
+        # new_path = []
+        # self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_1)
+        # self.possible_rects.extend(new_possible_rects)
+        # new_possible_rects = []
+        # new_path = []
+        # self.dfs3(rects_all, S, len(rects_all), 0, new_path, new_possible_rects, limit_2)
+        # self.possible_rects.extend(new_possible_rects)
 
         # 筛选出具有最小剩余面积的模块组合
         self.possible_rects.sort(reverse=True)
@@ -402,6 +406,8 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
             self.boxs = list(map(float, location))
             self.boxStr = location[0] + "x" + location[1] + "x" + location[2]
             S = self.boxs[0]*self.boxs[1]*self.boxs[2]
+            self.path = "results\\" + self.boxStr
+            calculator.setPath(self.path)
 
             # 读取约束条件
             M_limit = []
@@ -567,13 +573,13 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         calculator.pause()
 
     def refreshData(self):
-        #return
-        self.pause()    # 初始化就启动程序，但不开始扫描
+        calculator.StartDraw.wait()
+        #self.pause()    # 初始化就启动程序，但不开始扫描
         while self.__running.isSet():
             self.__flag.wait()
             calculator.RedrawFlag.wait()
 
-            time.sleep(self.timeInterval)
+            #time.sleep(self.timeInterval)
 
             try:
                 # 实时更新数据
@@ -582,25 +588,22 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
                 if len(self.optpoints)>0 and len(self.optpoints) != 1 and self.optpoints[0][1] == self.optpoints[1][1]:
                     self.optpoints.pop(0)
 
-                # 刷新时间
-                self.now = time.time() # 记录现在时间戳
-                k = time.localtime(self.now - self.startTime + self.runningTime)
-                self.label_2.setText('用时:' + str(time.strftime('%M:%S', k)))
+                # # 刷新时间
+                # self.now = time.time() # 记录现在时间戳
+                # k = time.localtime(self.now - self.startTime + self.runningTime)
+                #self.label_2.setText('用时:' + str(time.strftime('%M:%S', k)))
 
                 self.update()
-                if stop:
-                    self.pushButton_2.setEnabled(True)
-                    self.statusBar.showMessage('    状态：计算完成...(请选择 保存数据/清除图形)')
-                    self.__globalFlag.clear()
-                    self.__globalFlag.wait()  # 结束
-                    # 保存截图
-                    path = "results\\" + self.boxStr
-                    if os.path.exists(path) == False:
-                        os.mkdir(path)  # 创建目录
-                    pic = ImageGrab.grab((1100, 500, 1500, 850))
-                    pic.save(path + "\\" + str(self.pic_count) + ".jpg")
-                    self.pic_count += 1
+                self.pushButton_2.setEnabled(True)
+
+                # 保存截图
+                pic = ImageGrab.grab((1100, 450, 1500, 850))
+                pic.save(self.path + "\\" + str(calculator.pic_count) + ".jpg")
+                # 延迟一定时间用于图片保存
+                time.sleep(0.5)
+                # 关闭视图刷新
                 calculator.RedrawFlag.clear()
+                # 通知计算程序可以继续计算
                 calculator.RedrawOver.set()
             except Exception as e:
                 print(e)

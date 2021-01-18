@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-import copy,sys
+import copy,sys,time,os,shutil
 import threading
 import numpy as np
 
@@ -99,14 +99,20 @@ class Calculator(threading.Thread, pack_1D):
         self.gen_limit = self.interval
         self.succeed = 0
         self.idx = 0
+        self.path = ""
+        self.remain_area = 0
 
         # 为了筛选
         self.S = 0
         self.M_limit = []
+        self.ValidRects = []
         self.RedrawFlag = threading.Event()
         self.RedrawFlag.clear()
         self.RedrawOver = threading.Event()
         self.RedrawOver.clear()
+        self.StartDraw = threading.Event()
+        self.StartDraw.clear()
+        self.pic_count = 0
 
         self.iptpoints = []  # 读取的数据点:[[s, num, gender, [[], [], [], []]], ..]
         self.optpoints = [[0, 0, -1, [[0, 0], [0, 0], [0, 0]]]]  # 输出的数据点:[[s, num, gender, [[], [], [], []]], ..]
@@ -154,7 +160,7 @@ class Calculator(threading.Thread, pack_1D):
         k.T[-1] = 0.5
         self.grids = k
 
-    def judgeValid(self, try_idx):
+    def judgeValid(self, try_idx, needDraw=False):
         try:
             # 初始模块组合方案
             self.clear()
@@ -172,7 +178,7 @@ class Calculator(threading.Thread, pack_1D):
                 self.mutex.release()
                 self.settledPoints.clear()
                 self.initGrid()
-                self.place_rect_rand()
+                self.place_rect_rand(needDraw)
                 gen = gen + 1
                 if gen > self.gen_limit:
                     break
@@ -185,7 +191,7 @@ class Calculator(threading.Thread, pack_1D):
             print("gen = ", gen, ", isValid = false")
             return False
         except Exception as e:
-            print(e)
+            print("judgeValid error: ", e)
 
     # 预估可排列的组合方案数P1
     def stage_1(self):
@@ -215,7 +221,7 @@ class Calculator(threading.Thread, pack_1D):
 
             return total - low_idx + 1
         except Exception as e:
-            print(e)
+            print("stage_1 error: ", e)
 
     # 根据剩余面积约束继续筛选
     def stage_2(self, total_valid):
@@ -235,6 +241,7 @@ class Calculator(threading.Thread, pack_1D):
             high_bound = sys.float_info.max
             low_bound = 0
             for M in self.M_limit:
+                valid_rects = []
                 if type(M) == type(1.0):     # 指定剩余面积阈值，输出刚好等于，如果没有则输出最靠近的
                     valid_area = self.S - M
                     isFind = False
@@ -253,7 +260,10 @@ class Calculator(threading.Thread, pack_1D):
                     for v in self.possible_rects[idx:]:
                         if v[0] == valid_area:
                             valid_count = valid_count + 1
+                            index_one = self.possible_rects.index(v)
+                            valid_rects.append([index_one, v])
                         elif v[0] < valid_area:
+                            self.ValidRects.append(valid_rects)
                             break
                     print("The number of feasible solutions with specified remaining area (", M, ") = ", valid_count, ", the area = ", valid_area)
                 elif type(M) == type([1,2]):   # 指定剩余面积是一个范围，输出处于该范围的所有组合方案数
@@ -263,11 +273,62 @@ class Calculator(threading.Thread, pack_1D):
                     for v in self.possible_rects[idx:]:
                         if v[0] <= high_bound and v[0] >= low_bound:
                             valid_count = valid_count + 1
+                            index_one = self.possible_rects.index(v)
+                            valid_rects.append([index_one, v])
                         elif v[0] < low_bound:
+                            self.ValidRects.append(valid_rects)
                             break
                     print("The number of feasible solutions with specified remaining area [", M[0], ",", M[1], "] = ", valid_count, ", the area = [", low_bound, ",",high_bound,"]")
         except Exception as e:
-            print(e)
+            print("stage_2 error: ", e)
+
+    # 对少于100的组合方案，a).每个组合搜索出一种排列并输出数据到文件保存，b).可视化图例进行截图保存
+    def stage_4(self):
+        try:
+            if os.path.exists(self.path) == True:   # 删除已有目录
+                shutil.rmtree(self.path)    #空目录、有内容的目录都可以删
+            os.mkdir(self.path)  # 创建空目录
+            file_path = self.path + "\\result.csv"
+            open(file_path, mode='w')   # 打开一个文件只用于写入。如果该文件已存在则打开文件，并从开头开始编辑，即原有内容会被删除。如果该文件不存在，创建新文件。
+            with open(file_path, mode='a') as filename:
+                res = "image_id, usage, remain_area, combination, arrangement\n"
+                filename.write(res)
+            ans_count = 0
+            for i in range(len(self.ValidRects)):
+                valid_rects = self.ValidRects[i]
+                if len(valid_rects) > 100:
+                    continue
+
+                print("now search M_limit = ", self.M_limit[i], ", valid_rects number = ", len(valid_rects))
+
+                if ans_count > 0:
+                    file_path = self.path + "\\result.csv"
+                    with open(file_path, mode='a') as filename:
+                        filename.write("\n")
+
+                # 搜索每个组合的排列，并输出排列结果
+                for j in range(len(valid_rects)):
+                    v = valid_rects[j]
+                    try_idx = v[0]
+                    self.remain_area = self.S - v[1][0]
+                    flag = self.judgeValid(try_idx, True)
+                    print("try_idx = ", try_idx, ", searched = ", flag)
+                ans_count = ans_count + 1
+
+            # 处理最后一张图片的延迟
+            time.sleep(1)
+            # 通知刷新视图
+            self.RedrawFlag.set()
+            # 等待刷新完成之后再跳出
+            self.RedrawOver.wait()
+            self.RedrawOver.clear()
+
+            # 删除无效的"0.jpg"
+            filepath = self.path + "\\0.jpg"
+            if os.path.isfile(filepath):
+                os.remove(filepath)
+        except Exception as e:
+            print("stage_4 error: ", e)
 
     def calculating(self):
         '''
@@ -277,58 +338,21 @@ class Calculator(threading.Thread, pack_1D):
         #print('开始计算')
         np.random.seed()  # RandomState生成随机数种子
 
-        # ====================阶段1：预估可排列的组合方案数P1：采用二分搜索算法================================================================
+        # ====================阶段1：预估可排列的组合方案数P1：采用二分搜索算法=========================================================
         total_valid = self.stage_1()
         print("The number of feasible solutions that can be arranged in the box = ", total_valid)
 
-        # ====================阶段2：搜索P1中排列具有最小剩余面积M为定值的组合方案数P2=========================================================
+        # ====================阶段2：根据剩余面积约束搜索P1中符合要求的组合方案数P2======================================================
         self.stage_2(total_valid)
+
+        # ====================阶段3：在P2上继续添加多目标的约束，缩窄组合方案数范围到100个，设为P4=======================================
+
+
+        # ====================阶段4：搜索P4中各种可能的排列，可以对每个组合设定一个排列方案限定数目，输出排列视图和详细数据==============
+        self.StartDraw.set()
+        self.stage_4()
+
         return
-
-        # ====================阶段3：搜索P1中排列具有最小剩余面积M为某个范围的组合方案数P3=====================================================
-
-
-        # ====================阶段4：在P1或者P3上继续添加多目标的约束，缩窄组合方案数范围到100个，设为P4=======================================
-
-
-        # ====================阶段5：搜索P4中各种可能的排列，可以对每个组合设定一个排列方案限定数目，输出排列视图和详细数据====================
-
-        while(True):
-            # 初始模块组合方案
-            self.clear()
-            self.initNewIptpoints(self.idx)
-            self.idx = self.idx + 1
-
-            # ====================排列矩形====================
-            source_rects = self.rects
-            gen = 0
-            while(len(self.optpoints)<len(source_rects) + 1):
-                self.rects = source_rects
-                # 获取互斥锁后，进程只能在释放锁后下个进程才能进来
-                self.mutex.acquire()
-                self.optpoints = [[0, 0, -1, [[0, 0], [0, 0], [0, 0]]]]
-                # 互斥锁必须被释放掉
-                self.mutex.release()
-                self.settledPoints.clear()
-                self.initGrid()
-                self.place_rect_rand()
-                gen = gen + 1
-                if gen > self.gen_limit:
-                    self.gen_limit = self.interval
-                    break
-            # ====================排列矩形====================
-
-            if gen <= self.gen_limit:
-                self.succeed += 1
-                self.gen_limit += self.interval
-                self.gen_limit = min(self.gen_limit, 2*self.interval)
-                self.idx = self.idx - 1
-                break
-
-        #self.place_rect_rand()
-
-        self.settledPoints = self.bestChoice
-        return True
 
     def randPos(self, low, high):
         a = np.random.uniform(low, high)  # 随机数范围
@@ -389,7 +413,7 @@ class Calculator(threading.Thread, pack_1D):
             self.bestChoice = copy.deepcopy(self.settledPoints)  # 保存排列结果, [[Yc, y_max, Xc, gender, location, num, s], ..]
             self.room_points = self.bestChoice[0]
         except Exception as e:
-            print(e)
+            print("place_living_room error: ", e)
 
     def getLeftSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
@@ -431,7 +455,7 @@ class Calculator(threading.Thread, pack_1D):
 
             return all_sub_answer
         except Exception as e:
-            print(e)
+            print("getLeftSpace error: ", e)
 
     def getTopSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
@@ -473,7 +497,7 @@ class Calculator(threading.Thread, pack_1D):
 
             return all_sub_answer
         except Exception as e:
-            print(e)
+            print("getTopSpace error: ", e)
 
     def getRightSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
@@ -515,7 +539,7 @@ class Calculator(threading.Thread, pack_1D):
 
             return all_sub_answer
         except Exception as e:
-            print(e)
+            print("getRightSpace error: ", e)
 
     def getDownSpace(self, room_graph, rect_width, rect_height):
         all_sub_answer = []
@@ -557,7 +581,7 @@ class Calculator(threading.Thread, pack_1D):
 
             return all_sub_answer
         except Exception as e:
-            print(e)
+            print("getDownSpace error: ", e)
 
     # 返回{0:{["down":[low_x, high_x, low_y, high_y],...];"right":[[xxx]...];1:[xxx...]}}，每个元素竖放的可行域空间，和横放的可行域空间
     def searchValidSpace(self, rect_width, rect_height):
@@ -673,9 +697,41 @@ class Calculator(threading.Thread, pack_1D):
                 check = True
             return select
         except Exception as e:
-            print(e)
+            print("selectOneSpace error: ", e)
 
-    def place_rect_rand(self):
+    def setPath(self,path):
+        self.path = path
+
+    # 保存当前排列数据：id，利用率，剩余面积，组合列表，排列数据
+    def saveResult(self):
+        try:
+            file_path = self.path + "\\result.csv"
+            with open(file_path, mode='a') as filename:   # mode='a'，即追加（append）模式，mode=' r' 则为读（read).
+                res = str(self.pic_count + 1) + "," + str(round(1 - self.remain_area / self.S, 4) * 100) + "%," + str(self.remain_area) + ",\""
+                for i in range(len(self.rects)):
+                    if i > 0:
+                        res = res + ","
+                    v = self.rects[i]
+                    res  = res + self.keyMap[v[1]]
+                res = res + "\",\"{"
+                for k in range(len(self.bestChoice)):   # [[Yc, y_max, Xc, gender, location, num, s], ..]
+                    if k > 0:
+                        res = res + ","
+                    v = self.bestChoice[k]
+                    res = res + self.keyMap[v[5]] + ":"
+                    res = res + "["
+                    for i in range(len(v[4])):
+                        if i > 0:
+                            res = res + ","
+                        points = [round(v[4][i][0], 1), round(v[4][i][1], 1)]
+                        res = res + str(points)    # 坐标以0.1为模数
+                    res = res + "]"
+                res = res + "}\"\n"
+                filename.write(res)
+        except Exception as e:
+            print("saveResult error: ", e)
+
+    def place_rect_rand(self, needDraw=False):
         try:
             # 1.在客厅的可行解空间随机选取一个位置放置
             self.place_living_room()
@@ -729,14 +785,17 @@ class Calculator(threading.Thread, pack_1D):
                 self.saveData([Yc, y_max, Xc, 0, new_graph, rect[1], rect[0]])
                 self.bestChoice = copy.deepcopy(self.settledPoints)  # 保存排列结果
 
-            if Succeed:
+            if needDraw and Succeed:
+                # 保存排列数据
+                self.saveResult()
                 # 通知刷新视图
                 self.RedrawFlag.set()
                 # 等待刷新完成之后再跳出
                 self.RedrawOver.wait()
                 self.RedrawOver.clear()
+                self.pic_count += 1
         except Exception as e:
-            print(e)
+            print("place_rect_rand error: ", e)
 
     # 形心/三个点的y值和最低
     def caculateCenter(self, gender, location=None):
@@ -1035,7 +1094,7 @@ class Calculator(threading.Thread, pack_1D):
             # 互斥锁必须被释放掉
             self.mutex.release()
         except Exception as e:
-            print(e)
+            print("refreshData error: ", e)
 
     def pause(self):
         self.__flag.clear()
@@ -1074,7 +1133,7 @@ class Calculator(threading.Thread, pack_1D):
             self.y_list.sort(reverse=True)
             return self.y_list[0][0]  # 返回y_max
         except Exception as e:
-            print(e)
+            print("saveData error: ", e)
 
     def sortData(self, graphs):
         '''
@@ -1115,7 +1174,7 @@ class Calculator(threading.Thread, pack_1D):
 
             return optpoints_data, stop
         except Exception as e:
-            print(e)
+            print("uploadData error: ", e)
 
     def downloadPossibleRects(self, possible_rects, best_rects, keyMap):
         try:
@@ -1126,24 +1185,27 @@ class Calculator(threading.Thread, pack_1D):
             # self.best_rects = copy.deepcopy(best_rects)
             # self.keyMap = copy.deepcopy(keyMap)
         except Exception as e:
-            print(e)
+            print("downloadPossibleRects error:", e)
 
     # 采用self.possibleRects的第idx个模块组合方案
     def initNewIptpoints(self, try_idx):
-        print("total = ", len(self.possible_rects), ", idx = ", try_idx, ", remain area = ", self.gridX*self.gridY - self.possible_rects[try_idx][0])
+        try:
+            print("total = ", len(self.possible_rects), ", idx = ", try_idx, ", remain area = ", self.gridX*self.gridY - self.possible_rects[try_idx][0])
 
-        new_iptpoints = []
-        for v in self.possible_rects[try_idx][1]:
-            gender = 0
-            num = v[1]
-            width = v[2]
-            height = v[3]
-            dumped_location = [[0, 0], [width, 0], [width, height], [0, height]]
-            new_iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
-            if 'D' in self.keyMap[num]:
-                self.setRoom(num)
-        # 传入新数据
-        self.downloadData(new_iptpoints)
+            new_iptpoints = []
+            for v in self.possible_rects[try_idx][1]:
+                gender = 0
+                num = v[1]
+                width = v[2]
+                height = v[3]
+                dumped_location = [[0, 0], [width, 0], [width, height], [0, height]]
+                new_iptpoints.append([num, gender, dumped_location])  # [[0, [[], [], [], []]], []]
+                if 'D' in self.keyMap[num]:
+                    self.setRoom(num)
+            # 传入新数据
+            self.downloadData(new_iptpoints)
+        except Exception as e:
+            print("initNewIptpoints error:", e)
 
     # 下载数据，入口函数
     def downloadData(self, iptpoints):
@@ -1192,7 +1254,7 @@ class Calculator(threading.Thread, pack_1D):
         # 按面积由大到小排
         self.iptpoints.sort(reverse=True)
         self.tris.sort(reverse=True)
-        self.rects.sort(reverse=True)
+        #self.rects.sort(reverse=True)
 
         #print('下载完成', self.iptpoints)
         self.__globalFlag.set()  # 释放计算器
