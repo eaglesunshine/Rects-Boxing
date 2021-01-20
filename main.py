@@ -49,6 +49,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.possible_rects = []
         self.best_rects = []
         self.path = ""
+        self.colorMap = {"A":QtCore.Qt.red, "B":QtCore.Qt.yellow, "C":QtCore.Qt.green, "D":QtCore.Qt.cyan, "E":QtCore.Qt.darkMagenta, "F":QtCore.Qt.gray}
 
         self.setupUi(self)
         self.buttonEvent()
@@ -139,8 +140,10 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         Y = self.origin[1] + self.scale * self.h  # 绘图原点Y
 
         if shape == 0:  # 0:矩形 1:三角形
-            co0 = QtGui.QColor(self.co_border)
-            co00 = QtGui.QColor(self.co_rect)
+            co0 = QtGui.QColor(self.co_border)  # 边界颜色
+            co00 = QtGui.QColor(self.co_rect)   # 矩形内部颜色
+            key = self.keyMap[int(num)]
+            co00 = co00 = QtGui.QColor(self.colorMap[key[0]])    # 修改矩形配色
             self.qp.setPen(co0)
             self.qp.setBrush(co00)
             points = [int(location[0][0] * scale + X), int(-location[0][1] * scale + Y),
@@ -152,7 +155,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
 
             x = int((location[0][0] * scale + location[1][0] * scale ) / 2 + X)  # 标号的位置
             y = int(-(location[0][1] * scale + location[2][1] * scale) / 2 + Y)
-            self.qp.drawText(x, y, self.keyMap[int(num)])
+            self.qp.drawText(x, y, key)
 
         # elif shape == 1:
         #     co1 = QtGui.QColor(self.co_border)
@@ -176,7 +179,7 @@ class MyWindow(QtWidgets.QMainWindow, threading.Thread, Ui_MainWindow):
         self.label.setText('利用率：' + str(usage) + '%')
 
         # 刷新剩余面积
-        self.label_2.setText("剩余面积: " + str(remain_area))
+        self.label_2.setText("占地面积: " + str(remain_area))
 
         # # 显示警戒线
         # co2 = QtGui.QColor(self.co_alarmLine)

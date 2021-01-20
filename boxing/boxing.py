@@ -223,6 +223,40 @@ class Calculator(threading.Thread, pack_1D):
         except Exception as e:
             print("stage_1 error: ", e)
 
+    def lower_bound(self, data, x, idx):
+        try:
+            left = 0
+            right = len(data) - 1
+            while(left < right):
+                mid = int((left + right) / 2)
+                if data[mid][0] == x:
+                    right = right - 1
+                elif data[mid][0] > x:
+                    left = mid + 1
+                else:
+                    right = mid - 1
+
+            return min(left, len(data) - 1) + idx
+        except Exception as e:
+            print("lower_bound error: ", e)
+
+    def upper_bound(self, data, x, idx):
+        try:
+            left = 0
+            right = len(data) - 1
+            while (left < right):
+                mid = int((left + right) / 2)
+                if data[mid][0] == x:
+                    left = left + 1
+                elif data[mid][0] > x:
+                    left = mid + 1
+                else:
+                    right = mid - 1
+
+            return max(right, 0) + idx
+        except Exception as e:
+            print("upper_bound error: ", e)
+
     # 根据剩余面积约束继续筛选
     def stage_2(self, total_valid):
         try:
@@ -238,46 +272,26 @@ class Calculator(threading.Thread, pack_1D):
             print("The number of feasible solutions with minimum remaining area = ", valid_count, ", the area = ", valid_area)
 
             # 根据M_limit筛选符合要求的组合方案数
-            high_bound = sys.float_info.max
-            low_bound = 0
             for M in self.M_limit:
                 valid_rects = []
                 if type(M) == type(1.0):     # 指定剩余面积阈值，输出刚好等于，如果没有则输出最靠近的
                     valid_area = self.S - M
-                    isFind = False
-                    for v in self.possible_rects[idx:]:
-                        if v[0] > valid_area and v[0] < high_bound:
-                            high_bound = v[0]
-                        elif v[0] < valid_area and v[0] > low_bound:
-                            low_bound = v[0]
-                            break
-                        elif v[0] == valid_area:
-                            isFind = True
-                            break
-                    valid_count = 0
-                    if isFind == False:
-                        valid_area = low_bound
-                    for v in self.possible_rects[idx:]:
-                        if v[0] == valid_area:
-                            valid_count = valid_count + 1
-                            index_one = self.possible_rects.index(v)
-                            valid_rects.append([index_one, v])
-                        elif v[0] < valid_area:
-                            self.ValidRects.append(valid_rects)
-                            break
-                    print("The number of feasible solutions with specified remaining area (", M, ") = ", valid_count, ", the area = ", valid_area)
+                    low_idx = self.lower_bound(self.possible_rects[idx:], valid_area, idx)
+                    high_idx = self.upper_bound(self.possible_rects[idx:], valid_area, idx)
+                    valid_count = high_idx - low_idx + 1
+                    for i in range(low_idx, high_idx + 1):
+                        valid_rects.append([i, self.possible_rects[i]])
+                    self.ValidRects.append(valid_rects)
+                    print("The number of feasible solutions with specified remaining area (", M, ") = ", valid_count, ", the area = ", self.possible_rects[low_idx][0])
                 elif type(M) == type([1,2]):   # 指定剩余面积是一个范围，输出处于该范围的所有组合方案数
                     high_bound = self.S - M[0]
                     low_bound = self.S - M[1]
-                    valid_count = 0
-                    for v in self.possible_rects[idx:]:
-                        if v[0] <= high_bound and v[0] >= low_bound:
-                            valid_count = valid_count + 1
-                            index_one = self.possible_rects.index(v)
-                            valid_rects.append([index_one, v])
-                        elif v[0] < low_bound:
-                            self.ValidRects.append(valid_rects)
-                            break
+                    low_idx = self.lower_bound(self.possible_rects[idx:], high_bound, idx)
+                    high_idx = self.upper_bound(self.possible_rects[idx:], low_bound, idx)
+                    valid_count = high_idx - low_idx + 1
+                    for i in range(low_idx, high_idx + 1):
+                        valid_rects.append([i, self.possible_rects[i]])
+                    self.ValidRects.append(valid_rects)
                     print("The number of feasible solutions with specified remaining area [", M[0], ",", M[1], "] = ", valid_count, ", the area = [", low_bound, ",",high_bound,"]")
         except Exception as e:
             print("stage_2 error: ", e)
@@ -422,19 +436,19 @@ class Calculator(threading.Thread, pack_1D):
             # 搜索与客厅左边接触的可行空间：游标是rect的右下角点
             start_x = room_graph[0][0]
             start_y = max(room_graph[0][1] - (rect_height - 0.9), 0)
-            cursor_x = int(start_x * self.gridScale)
+            cursor_x = round(start_x * self.gridScale)
             last_valid = -1
             sub_answer = []
-            for cursor_y in range(int(start_y * self.gridScale), int((room_graph[3][1] - 0.9) * self.gridScale) + 1):
+            for cursor_y in range(round(start_y * self.gridScale), round((room_graph[3][1] - 0.9) * self.gridScale) + 1):
                 if start_x < rect_width:
                     break  # 探索区域容不下rect，直接退出
 
                 # 判断当前角点pos是否合法，更新可行区间
                 isValid = True
-                if cursor_y + int(rect_height * self.gridScale) > self.gridY* self.gridScale:
+                if cursor_y + round(rect_height * self.gridScale) > self.gridY* self.gridScale:
                     isValid = False
                 else:
-                    for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
+                    for cursor in range(cursor_y, cursor_y + round(rect_height * self.gridScale) + 1):
                         if self.grids[cursor_x - 1, cursor] == 1:
                             isValid = False
                             break
@@ -450,7 +464,7 @@ class Calculator(threading.Thread, pack_1D):
                         all_sub_answer.append(sub_answer)
 
                 # 遍历到终点需要额外判断一次：游标是rect的左下角点
-                if isValid and cursor_y == int((room_graph[3][1] - 0.9) * self.gridScale):
+                if isValid and cursor_y == round((room_graph[3][1] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
             return all_sub_answer
@@ -464,19 +478,19 @@ class Calculator(threading.Thread, pack_1D):
             # 搜索与客厅上边接触的可行空间：游标是rect的左下角点
             start_x = max(room_graph[3][0] - (rect_width - 0.9), 0)
             start_y = room_graph[3][1]
-            cursor_y = int(start_y * self.gridScale)
+            cursor_y = round(start_y * self.gridScale)
             last_valid = -1
             sub_answer = []
-            for cursor_x in range(int(start_x * self.gridScale), int((room_graph[2][0] - 0.9) * self.gridScale) + 1):
+            for cursor_x in range(round(start_x * self.gridScale), round((room_graph[2][0] - 0.9) * self.gridScale) + 1):
                 if self.gridY - start_y < rect_height:
                     break  # 探索区域容不下rect，直接退出
 
                 # 判断当前角点pos是否合法，更新可行区间
                 isValid = True
-                if cursor_x + int(rect_width * self.gridScale) > self.gridX* self.gridScale:
+                if cursor_x + round(rect_width * self.gridScale) > self.gridX* self.gridScale:
                     isValid = False
                 else:
-                    for cursor in range(cursor_x, cursor_x + int(rect_width * self.gridScale) + 1):
+                    for cursor in range(cursor_x, cursor_x + round(rect_width * self.gridScale) + 1):
                         if self.grids[cursor, cursor_y + 1] == 1:
                             isValid = False
                             break
@@ -492,7 +506,7 @@ class Calculator(threading.Thread, pack_1D):
                         all_sub_answer.append(sub_answer)
 
                 # 遍历到终点需要额外判断一次：游标是rect的左下角点
-                if isValid and cursor_x == int((room_graph[2][0] - 0.9) * self.gridScale):
+                if isValid and cursor_x == round((room_graph[2][0] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
             return all_sub_answer
@@ -506,19 +520,19 @@ class Calculator(threading.Thread, pack_1D):
             # 搜索与客厅右边接触的可行空间：游标是rect的左下角点
             start_x = room_graph[1][0]
             start_y = max(room_graph[1][1] - (rect_height - 0.9), 0)
-            cursor_x = int(start_x * self.gridScale)
+            cursor_x = round(start_x * self.gridScale)
             last_valid = -1
             sub_answer = []
-            for cursor_y in range(int(start_y * self.gridScale), int((room_graph[2][1] - 0.9) * self.gridScale) + 1):
+            for cursor_y in range(round(start_y * self.gridScale), round((room_graph[2][1] - 0.9) * self.gridScale) + 1):
                 if self.gridX - start_x < rect_width:
                     break  # 探索区域容不下rect，直接退出
 
                 # 判断当前角点pos是否合法，更新可行区间
                 isValid = True
-                if cursor_y + int(rect_height * self.gridScale) > self.gridY* self.gridScale:
+                if cursor_y + round(rect_height * self.gridScale) > self.gridY* self.gridScale:
                     isValid = False
                 else:
-                    for cursor in range(cursor_y, cursor_y + int(rect_height * self.gridScale) + 1):
+                    for cursor in range(cursor_y, cursor_y + round(rect_height * self.gridScale) + 1):
                         if self.grids[cursor_x + 1, cursor] == 1:
                             isValid = False
                             break
@@ -534,7 +548,7 @@ class Calculator(threading.Thread, pack_1D):
                         all_sub_answer.append(sub_answer)
 
                 # 遍历到终点需要额外判断一次：游标是rect的左下角点
-                if isValid and cursor_y == int((room_graph[2][1] - 0.9) * self.gridScale):
+                if isValid and cursor_y == round((room_graph[2][1] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
             return all_sub_answer
@@ -548,19 +562,19 @@ class Calculator(threading.Thread, pack_1D):
             # 搜索与客厅下边接触的可行空间：游标是rect的左上角点
             start_x = max(room_graph[0][0] - (rect_width - 0.9), 0)
             start_y = room_graph[0][1]
-            cursor_y = int(start_y * self.gridScale)
+            cursor_y = round(start_y * self.gridScale)
             last_valid = -1
             sub_answer = []
-            for cursor_x in range(int(start_x * self.gridScale), int((room_graph[1][0] - 0.9) * self.gridScale) + 1):
+            for cursor_x in range(round(start_x * self.gridScale), round((room_graph[1][0] - 0.9) * self.gridScale) + 1):
                 if start_y < rect_height:
                     break  # 探索区域容不下rect，直接退出
 
                 # 判断当前角点pos是否合法，更新可行区间
                 isValid = True
-                if cursor_x + int(rect_width * self.gridScale) > self.gridX* self.gridScale:
+                if cursor_x + round(rect_width * self.gridScale) > self.gridX* self.gridScale:
                     isValid = False
                 else:
-                    for cursor in range(cursor_x, cursor_x + int(rect_width * self.gridScale) + 1):
+                    for cursor in range(cursor_x, cursor_x + round(rect_width * self.gridScale) + 1):
                         if self.grids[cursor, cursor_y] == 1:
                             isValid = False
                             break
@@ -576,7 +590,7 @@ class Calculator(threading.Thread, pack_1D):
                         all_sub_answer.append(sub_answer)
 
                 # 遍历到终点需要额外判断一次：游标是rect的左下角点
-                if isValid and cursor_x == int((room_graph[1][0] - 0.9) * self.gridScale):
+                if isValid and cursor_x == round((room_graph[1][0] - 0.9) * self.gridScale):
                     all_sub_answer.append(sub_answer)
 
             return all_sub_answer
@@ -755,6 +769,38 @@ class Calculator(threading.Thread, pack_1D):
                 # 随机探索可行位置：找出围绕客厅的4个可行域(无可行域时此轮方案直接结束，重新从客厅开始)->随机选定一个可行域->使用randPos选定摆放位置。
                 answer = self.searchValidSpace(l,h)
                 #print("answer: ", answer)
+                if self.keyMap[rect[1]] == "F1":    # 阳台必须沿着最长边摆放
+                    # 不允许摆放的区间
+                    answer[1]["down"] = []
+                    answer[0]["right"] = []
+                    answer[1]["top"] = []
+                    answer[0]["left"] = []
+                    # 允许摆放的区间必须长边全部接触
+                    valid_spqce = []
+                    min_x = round(self.room_points[4][0][0]*self.gridScale)
+                    max_x = round((self.room_points[4][1][0] - l)*self.gridScale)
+                    min_y = round(self.room_points[4][0][1]*self.gridScale)
+                    max_y = round((self.room_points[4][3][1] - h)*self.gridScale)
+                    for k in answer[0]["down"]: # 左上角点
+                        if (k[0] > max_x or k[1] < min_x) == False:
+                            valid_spqce.append([max(k[0], min_x), min(k[1], max_x), k[2], k[3]])
+                    answer[0]["down"] = valid_spqce
+                    valid_spqce = []
+                    for k in answer[1]["right"]: # 左下角点
+                        if (k[2] > max_y and k[3] < min_y) == False:
+                            valid_spqce.append([k[0], k[1], max(k[2], min_y), min(k[3], max_y)])
+                    answer[1]["right"] = valid_spqce
+                    valid_spqce = []
+                    for k in answer[0]["top"]: # 左下角点
+                        if (k[0] > max_x or k[1] < min_x) == False:
+                            valid_spqce.append([max(k[0], min_x), min(k[1], max_x), k[2], k[3]])
+                    answer[0]["top"] = valid_spqce
+                    valid_spqce = []
+                    for k in answer[1]["left"]: # 右下角点
+                        if (k[2] > max_y and k[3] < min_y) == False:
+                            valid_spqce.append([k[0], k[1], max(k[2], min_y), min(k[3], max_y)])
+                    answer[1]["left"] = valid_spqce
+
                 select = self.selectOneSpace(answer)
                 #print("select: ", select)
 
@@ -1286,11 +1332,16 @@ class Calculator(threading.Thread, pack_1D):
         while self.__running.isSet():
             self.__globalFlag.wait()
             # 开始计算
+            start_time = time.time()
             answer = self.calculating()
             if answer:
                 print('计算完成')
             else:
                 print('计算终止')
+
+            end_time = time.time()
+            k = time.localtime(end_time - start_time)
+            print('用时:' + str(time.strftime('%M:%S', k)))
 
             self.finishFlag = True
             self.__globalFlag.clear()  # 锁定计算器
